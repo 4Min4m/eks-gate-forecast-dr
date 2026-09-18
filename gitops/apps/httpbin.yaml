@@ -1,0 +1,32 @@
+# The httpbin application. Argo CD auto-detects the kustomization.yaml in k8s/
+# and renders it. Managed entirely from Git: change a manifest, commit, and
+# Argo CD reconciles the cluster to match.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: httpbin
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: eks-httpbin-alb
+  source:
+    repoURL: https://github.com/4Min4m/eks-httpbin-alb.git
+    targetRevision: main
+    path: k8s
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: httpbin
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
