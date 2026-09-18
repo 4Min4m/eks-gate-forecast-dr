@@ -1,0 +1,75 @@
+# Runs the forecaster every 5 minutes. A CronJob (not a Deployment/sidecar)
+# on purpose: the workload is a 10-second batch computation, not a long-lived
+# service, and CronJob keeps the whole POC in-cluster with no extra Lambda
+# or ECS infra to stand up (see PLAN's own preference for this over a
+# scheduled Lambda).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: predictive-scaler
+  namespace: httpbin
+spec:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 120
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: predictive-scaler
+        spec:
+          serviceAccountName: predictive-scaler
+          automountServiceAccountToken: true
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: forecaster
+              # Public, unmodified base image — no build/push/ECR step needed
+              # for this POC. pip-installs boto3 at run time; for anything
+              # longer-lived than a 5-minute CronJob you'd bake a real image.
+              image: python:3.12-slim
+              command: ["/bin/sh", "-c"]
+              args:
+                - "pip install --quiet boto3 && python /scripts/forecast.py"
+              env:
+                - name: AWS_REGION
+                  value: "us-east-1"
+                - name: ALB_NAME
+                  value: "httpbin-public-alb"
+                - name: CUSTOM_METRIC_NAMESPACE
+                  value: "httpbin/predictive-scaling"
+                - name: CUSTOM_METRIC_NAME
+                  value: "DesiredReplicas"
+                - name: REQUESTS_PER_POD_PER_MINUTE
+                  value: "300" # CHANGE-ME once you've load-tested your own pod capacity
+                - name: MIN_REPLICAS
+                  value: "2"
+                - name: MAX_REPLICAS
+                  value: "20"
+              volumeMounts:
+                - name: script
+                  mountPath: /scripts
+                  readOnly: true
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: false # pip install needs to write site-packages
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  memory: 256Mi
+          volumes:
+            - name: script
+              configMap:
+                name: predictive-scaler-script
