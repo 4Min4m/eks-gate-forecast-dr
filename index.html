@@ -1,0 +1,475 @@
+[file name]: project-showcase-index.html
+[file content begin]
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gate. Forecast. Failover. — EKS Platform</title>
+<meta name="description" content="A GitOps-managed EKS platform with a blocking security gate, KEDA-driven predictive autoscaling, and a tested DynamoDB/Route 53 disaster-recovery path.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#10161b;
+    --panel:#161e24;
+    --panel-alt:#1b242c;
+    --border:#2a343c;
+    --text:#edf1f3;
+    --muted:#8fa0a8;
+    --muted-dim:#5f6e75;
+    --teal:#4fbfae;
+    --teal-dim:rgba(79,191,174,.13);
+    --amber:#e2a33d;
+    --amber-dim:rgba(226,163,61,.13);
+    --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    font-size:16px;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{background:var(--teal-dim); color:var(--text);}
+  a{color:var(--teal);}
+  a:focus-visible, button:focus-visible{outline:2px solid var(--teal); outline-offset:2px;}
+
+  .shell{
+    display:grid;
+    grid-template-columns:220px minmax(0,1fr);
+    max-width:1180px;
+    margin:0 auto;
+  }
+  .rail{
+    position:sticky;
+    top:0;
+    align-self:start;
+    height:100vh;
+    padding:48px 20px 24px 32px;
+    border-right:1px solid var(--border);
+    display:flex;
+    flex-direction:column;
+    justify-content:space-between;
+  }
+  .rail-top .mark{
+    font-family:var(--mono);
+    font-size:13px;
+    color:var(--muted);
+    letter-spacing:.02em;
+  }
+  .rail nav{margin-top:40px;}
+  .rail nav a{
+    display:block;
+    font-family:var(--mono);
+    font-size:13px;
+    color:var(--muted);
+    text-decoration:none;
+    padding:7px 0;
+    border-left:2px solid transparent;
+    padding-left:12px;
+    margin-left:-14px;
+    transition:color .15s ease, border-color .15s ease;
+  }
+  .rail nav a:hover{color:var(--text);}
+  .rail-foot{font-family:var(--mono); font-size:12px; color:var(--muted-dim);}
+  .rail-foot a{color:var(--muted-dim); text-decoration:underline;}
+
+  main{padding:0 40px 100px 40px; min-width:0;}
+  section{
+    padding:88px 0 0 0;
+    max-width:760px;
+  }
+  section.wide{max-width:none;}
+  h1,h2,h3{font-family:var(--mono); font-weight:600; line-height:1.25; margin:0;}
+  h2{font-size:22px; color:var(--text); margin-bottom:20px;}
+  h2 .badge{margin-left:12px; vertical-align:2px;}
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--muted-dim);
+    margin:0 0 10px 0;
+  }
+  p{color:var(--muted); margin:0 0 16px 0; max-width:62ch;}
+  p:last-child{margin-bottom:0;}
+  strong{color:var(--text); font-weight:500;}
+  code{font-family:var(--mono); font-size:.92em; background:var(--panel-alt); padding:.15em .4em; border-radius:3px; color:var(--text);}
+
+  /* ---- hero ---- */
+  .hero{padding-top:64px;}
+  .hero h1{font-size:38px; letter-spacing:-.01em; max-width:16ch;}
+  .hero .sub{font-size:17px; color:var(--muted); max-width:52ch; margin-top:18px;}
+  .hero .cta{display:flex; gap:14px; margin-top:32px; flex-wrap:wrap;}
+  .btn{
+    font-family:var(--mono);
+    font-size:13px;
+    padding:11px 18px;
+    border-radius:4px;
+    text-decoration:none;
+    border:1px solid var(--border);
+    color:var(--text);
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .btn.primary{background:var(--teal); color:#0b1512; border-color:var(--teal); font-weight:500;}
+  .btn.primary:hover{background:#63cdbd;}
+  .btn:not(.primary):hover{border-color:var(--muted);}
+  .hero-diagram{margin-top:56px;}
+
+  /* ---- status badges ---- */
+  .badge{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    font-family:var(--mono);
+    font-size:11.5px;
+    padding:3px 9px 3px 7px;
+    border-radius:3px;
+    white-space:nowrap;
+  }
+  .badge .dot{width:6px; height:6px; border-radius:50%; display:inline-block;}
+  .badge.tested{background:var(--teal-dim); color:var(--teal);}
+  .badge.tested .dot{background:var(--teal);}
+  .badge.poc{background:var(--amber-dim); color:var(--amber);}
+  .badge.poc .dot{background:var(--amber);}
+
+  /* ---- spec table ---- */
+  .spec{width:100%; border-collapse:collapse; margin-top:8px;}
+  .spec tr{border-top:1px solid var(--border);}
+  .spec tr:last-child{border-bottom:1px solid var(--border);}
+  .spec td{padding:13px 10px; font-size:14.5px; vertical-align:top;}
+  .spec td:first-child{color:var(--text); font-family:var(--mono); font-size:13px; width:150px; white-space:nowrap;}
+  .spec td:nth-child(2){color:var(--muted);}
+  .spec td:last-child{width:120px; text-align:right;}
+
+  /* ---- diagram panel ---- */
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:6px;
+    padding:28px;
+  }
+  .diagram-caption{font-family:var(--mono); font-size:12px; color:var(--muted-dim); margin-top:14px;}
+
+  /* ---- gate list ---- */
+  .gate{border-top:1px solid var(--border); margin-top:8px;}
+  .gate-row{
+    display:grid;
+    grid-template-columns:110px 1fr;
+    gap:20px;
+    padding:16px 0;
+    border-bottom:1px solid var(--border);
+  }
+  .gate-row .label{font-family:var(--mono); font-size:13px; color:var(--teal);}
+  .gate-row p{margin:0; font-size:14.5px;}
+
+  /* ---- timeline ---- */
+  .timeline{margin-top:8px;}
+  .t-item{
+    display:grid;
+    grid-template-columns:34px 1fr;
+    gap:16px;
+    padding-bottom:26px;
+    position:relative;
+  }
+  .t-item:not(:last-child)::before{
+    content:"";
+    position:absolute;
+    left:16px; top:30px; bottom:0;
+    width:1px;
+    background:var(--border);
+  }
+  .t-num{
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--bg);
+    background:var(--muted);
+    width:34px; height:34px;
+    border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    z-index:1;
+  }
+  .t-item.done .t-num{background:var(--teal);}
+  .t-item.poc .t-num{background:var(--amber);}
+  .t-body h3{font-size:15px; margin-bottom:6px; font-family:var(--sans); font-weight:500;}
+  .t-body p{font-size:14px; margin-bottom:8px;}
+
+  /* ---- placeholder blocks ---- */
+  .ph{
+    border:1px dashed var(--border);
+    border-radius:6px;
+    background:var(--panel-alt);
+    padding:28px;
+    margin-top:16px;
+    text-align:center;
+  }
+  .ph .ph-label{
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--amber);
+    display:block;
+    margin-bottom:6px;
+  }
+  .ph .ph-desc{font-size:13px; color:var(--muted-dim); max-width:46ch; margin:0 auto;}
+
+  /* ---- footer ---- */
+  footer{
+    max-width:760px;
+    margin-top:110px;
+    padding-top:28px;
+    border-top:1px solid var(--border);
+    display:flex;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:16px;
+  }
+  footer .links a{font-family:var(--mono); font-size:13px; color:var(--muted); text-decoration:none; margin-right:20px;}
+  footer .links a:hover{color:var(--text);}
+  footer .name{font-family:var(--mono); font-size:13px; color:var(--muted-dim);}
+
+  @media (max-width:860px){
+    .shell{grid-template-columns:1fr;}
+    .rail{
+      position:relative; height:auto; top:auto;
+      flex-direction:row; align-items:center; justify-content:space-between;
+      padding:20px 20px; border-right:none; border-bottom:1px solid var(--border);
+    }
+    .rail nav{margin-top:0; display:flex; gap:16px; overflow-x:auto; flex-wrap:nowrap;}
+    .rail nav a{white-space:nowrap;}
+    .rail-foot{display:none;}
+    main{padding:0 20px 80px 20px;}
+    .hero h1{font-size:30px;}
+    .gate-row{grid-template-columns:1fr;}
+    .spec td:first-child{width:auto;}
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <aside class="rail">
+    <div class="rail-top">
+      <div class="mark">eks-gate-forecast-dr</div>
+      <nav>
+        <a href="#what">What it is</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#security">Security gate</a>
+        <a href="#scaling">Predictive scaling</a>
+        <a href="#dr">Disaster recovery</a>
+        <a href="#phases">Build log</a>
+      </nav>
+    </div>
+    <div class="rail-foot">
+      Built &amp; maintained by<br>
+      <a href="https://github.com/CHANGE-ME" target="_blank" rel="noopener">Amin Amini</a>
+    </div>
+  </aside>
+
+  <main>
+
+    <section class="hero">
+      <h1>Gate. Forecast. Failover.</h1>
+      <p class="sub">A tested EKS platform, not just a diagram of one. Terraform and GitOps
+        run an EKS cluster with cost-aware autoscaling and policy enforcement out of the box.
+        On top of that baseline: a blocking DevSecOps CI gate, a proactive autoscaler that
+        scales ahead of predictable traffic, and a disaster-recovery path with a measured
+        recovery time.</p>
+      <div class="cta">
+        <a class="btn primary" href="https://github.com/CHANGE-ME/eks-gate-forecast-dr" target="_blank" rel="noopener">View the repository</a>
+        <a class="btn" href="#phases">Read the build log</a>
+      </div>
+
+      <div class="hero-diagram panel">
+        <svg viewBox="0 0 920 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Architecture: Git and Argo CD deploy to an EKS cluster running Karpenter, Kyverno and the app, fronted by an ALB, with KEDA and a DR path as proof-of-concept extensions.">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#4a565e"/>
+            </marker>
+          </defs>
+          <style>
+            .box{fill:#1b242c; stroke:#2a343c; stroke-width:1;}
+            .box-poc{fill:#1b242c; stroke:#3d3626; stroke-width:1; stroke-dasharray:4 3;}
+            .lbl{font-family:'IBM Plex Mono',monospace; font-size:12px; fill:#edf1f3;}
+            .lbl-sm{font-family:'IBM Plex Mono',monospace; font-size:10px; fill:#8fa0a8;}
+            .lbl-poc{font-family:'IBM Plex Mono',monospace; font-size:10px; fill:#e2a33d;}
+            .edge{stroke:#4a565e; stroke-width:1.2; fill:none; marker-end:url(#arrow);}
+          </style>
+
+          <rect x="20" y="118" width="110" height="56" rx="5" class="box"/>
+          <text x="75" y="141" text-anchor="middle" class="lbl">Git repo</text>
+          <text x="75" y="157" text-anchor="middle" class="lbl-sm">Terraform + GitOps</text>
+
+          <path class="edge" d="M130,146 H186"/>
+
+          <rect x="188" y="118" width="110" height="56" rx="5" class="box"/>
+          <text x="243" y="141" text-anchor="middle" class="lbl">Argo CD</text>
+          <text x="243" y="157" text-anchor="middle" class="lbl-sm">app of apps</text>
+
+          <path class="edge" d="M298,146 H354"/>
+
+          <rect x="356" y="40" width="330" height="220" rx="6" class="box"/>
+          <text x="374" y="62" class="lbl-sm">EKS cluster</text>
+
+          <rect x="374" y="80" width="130" height="50" rx="4" class="box"/>
+          <text x="439" y="100" text-anchor="middle" class="lbl-sm">Karpenter</text>
+          <text x="439" y="115" text-anchor="middle" class="lbl-sm">reactive nodes</text>
+
+          <rect x="518" y="80" width="130" height="50" rx="4" class="box"/>
+          <text x="583" y="100" text-anchor="middle" class="lbl-sm">Kyverno</text>
+          <text x="583" y="115" text-anchor="middle" class="lbl-sm">admission policy</text>
+
+          <rect x="374" y="150" width="274" height="90" rx="4" class="box"/>
+          <text x="511" y="172" text-anchor="middle" class="lbl">httpbin</text>
+          <text x="511" y="188" text-anchor="middle" class="lbl-sm">2 replicas, pod anti-affinity</text>
+          <text x="511" y="220" text-anchor="middle" class="lbl-poc">+ KEDA proactive scaler (POC)</text>
+
+          <path class="edge" d="M686,146 H742"/>
+
+          <rect x="744" y="118" width="150" height="56" rx="5" class="box"/>
+          <text x="819" y="141" text-anchor="middle" class="lbl">ALB</text>
+          <text x="819" y="157" text-anchor="middle" class="lbl-sm">public / private ingress</text>
+
+          <rect x="356" y="272" width="330" height="0" fill="none"/>
+          <path class="edge" d="M600,240 V262" stroke-dasharray="3 3"/>
+          <rect x="474" y="264" width="264" height="34" rx="4" class="box-poc"/>
+          <text x="606" y="285" text-anchor="middle" class="lbl-poc">DR path (POC): DynamoDB Global Tables + Lambda + Route 53</text>
+        </svg>
+        <p class="diagram-caption">Solid boxes: deployed and tested. Dashed: proof-of-concept, off by default.</p>
+      </div>
+    </section>
+
+    <section id="what">
+      <h2>What it is</h2>
+      <p>An EKS platform built the way a small platform team actually runs one: infrastructure
+        as code, GitOps delivery, cost-aware autoscaling, and policy enforcement as the tested
+        baseline — then three additions on top, each scoped and labeled honestly as either
+        production-grade or a proof-of-concept.</p>
+
+      <table class="spec">
+        <tr><td>Infrastructure</td><td>Terraform, modular, per-environment state</td><td><span class="badge tested"><span class="dot"></span>tested</span></td></tr>
+        <tr><td>Delivery</td><td>Argo CD, GitOps, app-of-apps pattern</td><td><span class="badge tested"><span class="dot"></span>tested</span></td></tr>
+        <tr><td>Node scaling</td><td>Karpenter — bin-packing, spot-aware</td><td><span class="badge tested"><span class="dot"></span>tested</span></td></tr>
+        <tr><td>Policy</td><td>Kyverno admission control</td><td><span class="badge tested"><span class="dot"></span>tested</span></td></tr>
+        <tr><td>CI security</td><td>gitleaks · Semgrep · Checkov · npm audit</td><td><span class="badge poc"><span class="dot"></span>poc</span></td></tr>
+        <tr><td>App scaling</td><td>KEDA, forecast-driven, ahead of load</td><td><span class="badge poc"><span class="dot"></span>poc</span></td></tr>
+        <tr><td>Resilience</td><td>DynamoDB Global Tables + Route 53 failover</td><td><span class="badge poc"><span class="dot"></span>poc</span></td></tr>
+      </table>
+
+      <div class="ph">
+        <span class="ph-label">[ screenshot ]</span>
+        <span class="ph-desc">Argo CD UI showing all four apps Synced and Healthy, plus a Grafana panel with live cluster metrics — from the Phase 1 baseline verification.</span>
+      </div>
+    </section>
+
+    <section id="architecture" class="wide">
+      <h2 style="max-width:760px;">Architecture</h2>
+      <p style="max-width:760px;">Git is the only source of truth. Terraform provisions the
+        cluster and everything that needs AWS IAM (IRSA roles, Karpenter's NodePool, the load
+        balancer controller); Argo CD reconciles everything else — the app, the observability
+        stack, Kyverno's policies, and the two proof-of-concept additions — straight from this
+        repository. Nothing is applied by hand.</p>
+    </section>
+
+    <section id="security">
+      <h2>A CI gate that actually blocks <span class="badge poc"><span class="dot"></span>poc</span></h2>
+      <p>Four scanners, each independent so one failure never hides another. The build fails on
+        any finding by default — a soft-fail toggle exists only to demo a green run on purpose.</p>
+
+      <div class="gate">
+        <div class="gate-row"><span class="label">secrets</span><p>gitleaks scans the whole repository, not just the Terraform, on every push and PR.</p></div>
+        <div class="gate-row"><span class="label">sast</span><p>Semgrep, scoped to this repo's actual custom logic — the app itself is a prebuilt image, so the surface is small by design and the README says so.</p></div>
+        <div class="gate-row"><span class="label">sca</span><p>npm audit, conditional — it only runs if a <code>package.json</code> actually exists, instead of faking one to tick a box.</p></div>
+        <div class="gate-row"><span class="label">iac</span><p>Checkov against the Terraform, with a no-blanket-suppression policy: every skip needs a written reason and a documented production fix.</p></div>
+      </div>
+
+      <div class="ph">
+        <span class="ph-label">[ screenshot ]</span>
+        <span class="ph-desc">A failed Actions run showing a deliberately planted secret caught by gitleaks — the Phase 2 checkpoint that proves the gate actually blocks something.</span>
+      </div>
+    </section>
+
+    <section id="scaling">
+      <h2>Scaling ahead of the load, not after it <span class="badge poc"><span class="dot"></span>poc</span></h2>
+      <p>A CronJob reads recent ALB request-rate history from CloudWatch, blends in a
+        same-time-yesterday signal, and publishes a forecasted replica count as a custom metric.
+        KEDA scales the app off that forecast instead of live load — the one thing a reactive HPA
+        structurally can't do. It's classical time-series smoothing, not a trained model, and the
+        README says that plainly too.</p>
+
+      <div class="ph">
+        <span class="ph-label">[ chart or GIF ]</span>
+        <span class="ph-desc">Two Grafana screenshots of pod count over time, same synthetic traffic ramp: one under a plain reactive HPA, one under the KEDA forecast — side by side.</span>
+      </div>
+    </section>
+
+    <section id="dr">
+      <h2>A failover with a number attached <span class="badge poc"><span class="dot"></span>poc</span></h2>
+      <p>DynamoDB Global Tables replicate one small table across two regions. A Lambda-backed
+        endpoint — not a fork of the app image — is deployed identically to both. Route 53 health
+        checks drive the failover; a short TTL keeps DNS propagation from dominating the
+        measured recovery time.</p>
+
+      <table class="spec">
+        <tr><td>RTO</td><td>time from health-check failure to Route 53 failing traffic over</td><td></td></tr>
+        <tr><td>RPO</td><td>near-zero, not zero — Global Tables replicate asynchronously</td><td></td></tr>
+      </table>
+
+      <div class="ph">
+        <span class="ph-label">[ screenshot or log ]</span>
+        <span class="ph-desc">The actual failover test: health check flipping to Unhealthy, the DNS record switching, and the measured RTO written down — not just quoted from a config file.</span>
+      </div>
+    </section>
+
+    <section id="phases">
+      <h2>Build log</h2>
+      <p>Every project accretes — this one absorbed a security-gate design from an earlier,
+        separate pipeline project rather than merging two competing delivery systems into one.
+        The full reasoning is in the repo's changelog; here's the shape of it.</p>
+
+      <div class="timeline">
+        <div class="t-item done">
+          <div class="t-num">0</div>
+          <div class="t-body"><h3>Repo consolidation</h3><p>Absorbed the security-gate concept from a separate CI/CD project — not its CodePipeline stack, which would have competed with Argo CD.</p></div>
+        </div>
+        <div class="t-item done">
+          <div class="t-num">1</div>
+          <div class="t-body"><h3>Baseline verification</h3><p>Confirmed the existing platform still deploys clean end to end before adding anything.</p></div>
+        </div>
+        <div class="t-item poc">
+          <div class="t-num">2</div>
+          <div class="t-body"><h3>DevSecOps gate</h3><p>Added the four-scanner CI gate, proven with a deliberately planted secret.</p></div>
+        </div>
+        <div class="t-item poc">
+          <div class="t-num">3</div>
+          <div class="t-body"><h3>Predictive scaling</h3><p>KEDA + a forecasting CronJob, measured against a reactive-HPA baseline.</p></div>
+        </div>
+        <div class="t-item poc">
+          <div class="t-num">4</div>
+          <div class="t-body"><h3>Disaster recovery</h3><p>Cross-region failover, tested once, torn back down.</p></div>
+        </div>
+        <div class="t-item done">
+          <div class="t-num">5</div>
+          <div class="t-body"><h3>Documentation</h3><p>This page, the README, and a study guide written phase by phase.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <div class="links">
+        <a href="https://github.com/CHANGE-ME/eks-gate-forecast-dr" target="_blank" rel="noopener">GitHub</a>
+        <a href="mailto:m.a.amini2011@gmail.com">Email</a>
+        <a href="https://linkedin.com/in/CHANGE-ME" target="_blank" rel="noopener">LinkedIn</a>
+      </div>
+      <div class="name">Amin Amini — DevOps &amp; Platform Engineer</div>
+    </footer>
+
+  </main>
+</div>
+</body>
+</html>
+[file content end]
