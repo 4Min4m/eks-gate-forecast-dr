@@ -1,0 +1,28 @@
+# The policies. Split from the Kyverno install so the CRDs exist first; Argo CD
+# retries until the Kyverno CRDs are ready.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kyverno-policies
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: eks-httpbin-alb
+  source:
+    repoURL: https://github.com/4Min4m/eks-httpbin-alb.git
+    targetRevision: main
+    path: gitops/policies
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kyverno
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 10
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
