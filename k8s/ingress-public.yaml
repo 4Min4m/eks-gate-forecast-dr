@@ -1,0 +1,32 @@
+# Public Ingress for /get endpoint using an internet-facing ALB (HTTPS).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: httpbin-public
+  namespace: httpbin
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    # Serve on both 80 and 443, and redirect all HTTP to HTTPS.
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    # REQUIRED: an ACM certificate in the same region for your domain.
+    alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:us-east-1:REPLACE_ACCOUNT_ID:certificate/REPLACE_CERT_ID"
+    alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
+    alb.ingress.kubernetes.io/conditions.httpbin-service: |
+      [{"field":"http-method","httpMethodValues":["GET"]}]
+    alb.ingress.kubernetes.io/healthcheck-path: /status/200
+    alb.ingress.kubernetes.io/healthcheck-port: traffic-port
+    alb.ingress.kubernetes.io/load-balancer-name: httpbin-public-alb
+spec:
+  ingressClassName: alb
+  rules:
+  - http:
+      paths:
+      - path: /get
+        pathType: Prefix
+        backend:
+          service:
+            name: httpbin-service
+            port:
+              number: 80
