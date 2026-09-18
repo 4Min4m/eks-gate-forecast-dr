@@ -1,0 +1,32 @@
+# Predictive/proactive autoscaling POC.
+#
+# EXPLICIT FRAMING (repeated in README): this is a lightweight proactive
+# autoscaling proof-of-concept, not a production ML pipeline. The "forecast"
+# is classical time-series smoothing (weighted moving average with a
+# same-time-yesterday seasonal nudge), not a trained model — described
+# honestly as such everywhere it's discussed.
+#
+# Sync-wave 2: runs after KEDA (wave 1) so the ScaledObject CRD already
+# exists when Argo CD applies it (avoids a first-sync race).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: predictive-scaling
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: eks-httpbin-alb
+  source:
+    repoURL: https://CHANGE-ME/your-org/your-repo.git
+    targetRevision: main
+    path: k8s/predictive-scaling
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: httpbin
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
