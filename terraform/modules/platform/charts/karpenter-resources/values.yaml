@@ -1,0 +1,6 @@
+clusterName: ""
+nodeRole: ""
+discoveryTag: ""
+instanceCategories: ["t", "m"]
+capacityTypes: ["spot", "on-demand"]
+cpuLimit: "100"
