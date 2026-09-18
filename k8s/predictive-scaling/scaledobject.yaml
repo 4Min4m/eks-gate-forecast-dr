@@ -1,0 +1,47 @@
+# TriggerAuthentication tells KEDA to use the KEDA operator's own IRSA
+# identity (pod identity) rather than static keys — same "no long-lived
+# credentials" principle as everything else in this platform.
+#
+# NOTE: KEDA's scaler field names occasionally shift between minor versions
+# — verify `identityOwner`/`podIdentity.provider` against the docs for
+# whichever KEDA version gitops/apps/keda.yaml pins before relying on this.
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: keda-trigger-auth-aws
+  namespace: httpbin
+spec:
+  podIdentity:
+    provider: aws-eks
+---
+# Scales the httpbin Deployment off the forecast metric the CronJob
+# publishes, instead of off live load — the actual mechanism under test in
+# this POC. targetMetricValue: "1" is a deliberate trick: the CronJob
+# already computes a *desired replica count* (not a raw request rate) and
+# publishes that as the metric value, so a target of 1 means "the metric
+# value IS the desired replica count" — KEDA doesn't need its own
+# rate-to-replica math.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: httpbin-predictive
+  namespace: httpbin
+spec:
+  scaleTargetRef:
+    name: httpbin
+  minReplicaCount: 2
+  maxReplicaCount: 20
+  cooldownPeriod: 120
+  pollingInterval: 30
+  triggers:
+    - type: aws-cloudwatch
+      authenticationRef:
+        name: keda-trigger-auth-aws
+      metadata:
+        namespace: "httpbin/predictive-scaling"
+        metricName: "DesiredReplicas"
+        dimensionName: "Service"
+        dimensionValue: "httpbin"
+        targetMetricValue: "1"
+        minMetricValue: "1"
+        awsRegion: "us-east-1"
