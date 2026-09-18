@@ -1,0 +1,36 @@
+provider "aws" {
+  region = var.region
+  default_tags { tags = var.tags }
+}
+
+# Second region for the DR proof-of-concept (Phase 4). Always declared —
+# provider blocks can't be conditional — but nothing in it is ever created
+# unless var.enable_dr_poc is true (see module "dr" below).
+provider "aws" {
+  alias  = "secondary"
+  region = var.dr_secondary_region
+  default_tags { tags = var.tags }
+}
+
+# helm/kubernetes providers are configured from the eks module outputs.
+provider "helm" {
+  kubernetes {
+    host                   = module.eks.cluster_endpoint
+    cluster_ca_certificate = base64decode(module.eks.cluster_ca_data)
+    exec {
+      api_version = "client.authentication.k8s.io/v1beta1"
+      command     = "aws"
+      args        = ["eks", "get-token", "--cluster-name", var.cluster_name, "--region", var.region]
+    }
+  }
+}
+
+provider "kubernetes" {
+  host                   = module.eks.cluster_endpoint
+  cluster_ca_certificate = base64decode(module.eks.cluster_ca_data)
+  exec {
+    api_version = "client.authentication.k8s.io/v1beta1"
+    command     = "aws"
+    args        = ["eks", "get-token", "--cluster-name", var.cluster_name, "--region", var.region]
+  }
+}
