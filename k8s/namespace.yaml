@@ -1,0 +1,7 @@
+# Create the namespace for the HTTPBin application
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: httpbin
+  labels:
+    app.kubernetes.io/part-of: eks-httpbin-alb
