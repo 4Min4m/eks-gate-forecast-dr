@@ -1,0 +1,70 @@
+# Observability: kube-prometheus-stack (Prometheus + Alertmanager + Grafana +
+# node-exporter + kube-state-metrics) deployed by Argo CD from the upstream
+# Helm chart. Demonstrates the app-of-apps managing a Helm source (this) as
+# well as a Kustomize source (httpbin).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-prometheus-stack
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: eks-httpbin-alb
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: kube-prometheus-stack
+    targetRevision: "65.5.1" # EXAMPLE — verify & pin with `helm search repo prometheus-community/kube-prometheus-stack --versions`
+    helm:
+      values: |
+        prometheus:
+          prometheusSpec:
+            retention: 15d
+            # Scrape ServiceMonitors/PodMonitors/Rules from ALL namespaces,
+            # not just those labelled with this Helm release. Classic gotcha.
+            serviceMonitorSelectorNilUsesHelmValues: false
+            podMonitorSelectorNilUsesHelmValues: false
+            ruleSelectorNilUsesHelmValues: false
+            resources:
+              requests:
+                cpu: 200m
+                memory: 512Mi
+              limits:
+                memory: 1Gi
+            storageSpec:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: gp3
+                  accessModes: ["ReadWriteOnce"]
+                  resources:
+                    requests:
+                      storage: 20Gi
+        alertmanager:
+          alertmanagerSpec:
+            storage:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: gp3
+                  accessModes: ["ReadWriteOnce"]
+                  resources:
+                    requests:
+                      storage: 5Gi
+        grafana:
+          persistence:
+            enabled: true
+            storageClassName: gp3
+            size: 5Gi
+          # Demo uses the chart default login (admin / prom-operator).
+          # CHANGE-ME in production: set grafana.admin.existingSecret.
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # ServerSideApply avoids the "metadata.annotations too long" error on the
+      # very large Prometheus operator CRDs.
+      - ServerSideApply=true
