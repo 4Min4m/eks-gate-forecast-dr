@@ -1,0 +1,37 @@
+# NOT included in kustomization.yaml on purpose — this is the "before"
+# comparison baseline, not part of the standing platform. A plain HPA and
+# KEDA's ScaledObject both drive replicas on the same Deployment, so they
+# must never run at the same time (they'll fight and flap).
+#
+# Usage:
+#   1. kubectl apply -f reactive-hpa-baseline.yaml
+#   2. Run the load test (loadtest/ramp.js), record Grafana as the "reactive" run.
+#   3. kubectl delete -f reactive-hpa-baseline.yaml
+#   4. Let Argo CD sync the real ScaledObject (kustomization.yaml) back in.
+#   5. Run the SAME load test again, record Grafana as the "proactive" run.
+#   6. Put both charts side by side — that comparison is the actual
+#      portfolio artifact for this phase, not the YAML itself.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: httpbin-reactive-baseline
+  namespace: httpbin
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: httpbin
+  minReplicas: 2
+  maxReplicas: 20
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+    scaleDown:
+      stabilizationWindowSeconds: 120
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60
