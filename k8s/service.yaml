@@ -1,0 +1,17 @@
+# ClusterIP service to expose HTTPBin internally
+apiVersion: v1
+kind: Service
+metadata:
+  name: httpbin-service
+  namespace: httpbin
+  labels:
+    app.kubernetes.io/name: httpbin
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: httpbin
+  ports:
+  - name: http
+    port: 80          # service port (unchanged, referenced by the Ingresses)
+    targetPort: 8080  # go-httpbin listens on 8080
+    protocol: TCP
