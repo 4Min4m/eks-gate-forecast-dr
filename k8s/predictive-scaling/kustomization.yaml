@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - serviceaccount.yaml
+  - cronjob.yaml
+  - scaledobject.yaml
+
+# Generates the ConfigMap from the actual script file, so the CronJob and
+# the script you edit/test locally can never drift out of sync.
+configMapGenerator:
+  - name: predictive-scaler-script
+    files:
+      - forecast.py
+    options:
+      disableNameSuffixHash: true
