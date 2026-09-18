@@ -1,0 +1,25 @@
+# Checkov configuration for this repo's Terraform.
+#
+# Philosophy carried over from the retired aws-devsecops-pipeline project:
+# no blanket suppression. Every skip must be a conscious, documented
+# trade-off, with a written justification here AND a production remediation
+# noted in the README's security section. Anything cheap to fix gets fixed,
+# not skipped.
+#
+# This file ships with NO skips. Checkov has not been run against this
+# codebase in a live CI/CD run yet (this golden copy was built without AWS
+# network access) — the first real run in your own GitHub Actions is
+# expected to surface some findings. When it does:
+#   1. Try to fix it first (most findings are a one-line resource change).
+#   2. If a finding is a deliberate trade-off for this demo (e.g. the
+#      httpbin ALB being intentionally internet-facing), add it below with
+#      a comment explaining why, and add the production fix to the README's
+#      "Security summary" section.
+# Do not add a skip you can't explain in an interview.
+directory:
+  - terraform
+framework:
+  - terraform
+compact: true
+
+skip-check: []
