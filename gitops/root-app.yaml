@@ -1,0 +1,27 @@
+# app-of-apps root. This single Application watches gitops/apps/ and syncs
+# every child Application found there. Add a new app to the platform by
+# committing one more file under gitops/apps/ — no manual kubectl needed.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: eks-httpbin-alb
+  source:
+    repoURL: https://github.com/CHANGE-ME/eks-httpbin-alb.git # CHANGE-ME
+    targetRevision: main
+    path: gitops/apps
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true    # delete resources removed from Git
+      selfHeal: true # revert manual drift back to Git state
+    syncOptions:
+      - CreateNamespace=false
