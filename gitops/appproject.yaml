@@ -1,0 +1,35 @@
+# AppProject scopes what this project may deploy — allowed sources, destinations,
+# and resource kinds. The RBAC boundary for GitOps.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: eks-httpbin-alb
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: HTTPBin platform and application manifests
+
+  sourceRepos:
+    - https://github.com/CHANGE-ME/eks-httpbin-alb.git # CHANGE-ME
+    - https://prometheus-community.github.io/helm-charts
+    - https://kyverno.github.io/kyverno
+
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: httpbin
+    - server: https://kubernetes.default.svc
+      namespace: argocd
+    - server: https://kubernetes.default.svc
+      namespace: monitoring
+    - server: https://kubernetes.default.svc
+      namespace: kyverno
+
+  # Monitoring operator and Kyverno install cluster-scoped CRDs/ClusterRoles.
+  clusterResourceWhitelist:
+    - group: "*"
+      kind: "*"
+
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"
