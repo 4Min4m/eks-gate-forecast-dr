@@ -1,0 +1,16 @@
+# Apply everything in the right order with a single command:
+#   kubectl apply -k k8s/
+#
+# Kustomize creates the Namespace before the namespaced resources, which
+# fixes the "namespace not found" race you get from `kubectl apply -f k8s/`
+# (that applies files alphabetically, so deployment.yaml runs before
+# namespace.yaml).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  - service.yaml
+  - deployment.yaml
+  - ingress-public.yaml
+  - ingress-private.yaml
