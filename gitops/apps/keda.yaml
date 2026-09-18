@@ -1,0 +1,47 @@
+# KEDA — event-driven autoscaling. Installed here (not from Terraform) for
+# the same reason kube-prometheus-stack is: it's a pure Kubernetes workload,
+# no Terraform-computed values needed except the operator's IRSA role ARN,
+# which is deterministic and filled in below (see terraform/modules/platform
+# output `keda_operator_role_arn`).
+#
+# Sync-wave 1: must exist (and have its CRDs installed) before the
+# predictive-scaling Application (wave 2), which creates a ScaledObject that
+# depends on KEDA's CRDs.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: keda
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: eks-httpbin-alb
+  source:
+    repoURL: https://kedacore.github.io/charts
+    chart: keda
+    targetRevision: "2.16.0" # verify & pin with `helm search repo kedacore/keda --versions`
+    helm:
+      values: |
+        serviceAccount:
+          create: true
+          name: keda-operator
+          annotations:
+            eks.amazonaws.com/role-arn: "arn:aws:iam::CHANGE-ME-ACCOUNT-ID:role/httpbin-dev-keda-operator-role"
+        resources:
+          operator:
+            requests:
+              cpu: 100m
+              memory: 100Mi
+            limits:
+              memory: 500Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: keda
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
