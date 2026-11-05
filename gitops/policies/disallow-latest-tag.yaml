@@ -16,7 +16,7 @@ spec:
       exclude:
         any:
           - resources:
-              namespaces: ["kube-system", "argocd", "monitoring", "kyverno", "karpenter"]
+              namespaces: ["kube-system", "argocd", "monitoring", "kyverno", "karpenter", "keda"]
       validate:
         message: "Using a mutable ':latest' (or untagged) image is not allowed."
         pattern:
