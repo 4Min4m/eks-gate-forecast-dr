@@ -1,0 +1,188 @@
+# CI for this repo: a blocking DevSecOps gate, then Terraform checks, then
+# an (optional) OIDC-authenticated plan.
+#
+#   security-gate  gitleaks · Semgrep · npm audit (only if a package.json
+#                  exists) · Checkov. Every scanner always runs, so one
+#                  failure never hides another; the job fails at the end if
+#                  any of them found something. Set the repo variable
+#                  SECURITY_SOFT_FAIL=true to report without failing (only
+#                  to demo a green run on purpose).
+#   validate       terraform fmt + validate (dev, prod, bootstrap), tflint,
+#                  and the forecaster's unit tests. Needs security-gate.
+#   plan           terraform plan for dev via GitHub OIDC (no stored AWS
+#                  keys). Runs only when the AWS_ROLE_ARN repo variable is
+#                  set, so forks and the public repo stay green without an
+#                  AWS account. Needs validate.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TF_VERSION: "1.9.8"
+  TFLINT_VERSION: "v0.53.0"
+  GITLEAKS_VERSION: "8.21.2"
+  SEMGREP_VERSION: "1.183.0"
+  CHECKOV_VERSION: "3.4.3"
+
+jobs:
+  security-gate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # gitleaks scans the full history, not just the tip
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: gitleaks — secrets (whole repo, full history)
+        id: gitleaks
+        continue-on-error: true
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz gitleaks
+          ./gitleaks git --redact --verbose .
+
+      - name: Semgrep — SAST (this repo's own code)
+        id: semgrep
+        continue-on-error: true
+        run: |
+          pip install --quiet "semgrep==${SEMGREP_VERSION}"
+          # go-httpbin is a prebuilt image, so the custom code here is the
+          # forecaster and the DR Lambda.
+          semgrep scan --metrics=off --error \
+            --config p/python --config p/secrets \
+            k8s terraform/modules/dr/lambda
+
+      - name: npm audit — SCA (only if a package.json exists)
+        id: npm
+        continue-on-error: true
+        run: |
+          manifests=$(git ls-files '*package.json' ':!:**/node_modules/**')
+          if [ -z "$manifests" ]; then
+            echo "No package.json in this repo — nothing to audit (skipped, not faked)."
+            exit 0
+          fi
+          for m in $manifests; do
+            (cd "$(dirname "$m")" && npm install --package-lock-only --ignore-scripts && npm audit --audit-level=high)
+          done
+
+      - name: Checkov — IaC (terraform/)
+        id: checkov
+        continue-on-error: true
+        run: |
+          pip install --quiet "checkov==${CHECKOV_VERSION}"
+          checkov --config-file .checkov.yaml
+
+      - name: Gate decision
+        env:
+          SOFT_FAIL: ${{ vars.SECURITY_SOFT_FAIL }}
+          GITLEAKS: ${{ steps.gitleaks.outcome }}
+          SEMGREP: ${{ steps.semgrep.outcome }}
+          NPM: ${{ steps.npm.outcome }}
+          CHECKOV: ${{ steps.checkov.outcome }}
+        run: |
+          {
+            echo "## Security gate"
+            echo "| scanner | result |"
+            echo "| --- | --- |"
+            echo "| gitleaks | $GITLEAKS |"
+            echo "| semgrep | $SEMGREP |"
+            echo "| npm audit | $NPM |"
+            echo "| checkov | $CHECKOV |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          failed=0
+          for r in "$GITLEAKS" "$SEMGREP" "$NPM" "$CHECKOV"; do
+            [ "$r" = "success" ] || failed=1
+          done
+          if [ "$failed" = 1 ]; then
+            if [ "$SOFT_FAIL" = "true" ]; then
+              echo "::warning::Security findings present, but SECURITY_SOFT_FAIL=true — not blocking."
+            else
+              echo "::error::Security gate failed — see the scanner steps above."
+              exit 1
+            fi
+          fi
+
+  validate:
+    needs: security-gate
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: terraform fmt
+        run: terraform fmt -check -recursive -diff terraform
+
+      - name: terraform validate (dev, prod, bootstrap)
+        run: |
+          for dir in terraform/environments/dev terraform/environments/prod terraform/bootstrap; do
+            echo "::group::$dir"
+            terraform -chdir="$dir" init -backend=false -input=false
+            terraform -chdir="$dir" validate
+            echo "::endgroup::"
+          done
+
+      - uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: ${{ env.TFLINT_VERSION }}
+
+      - name: tflint
+        working-directory: terraform
+        run: |
+          tflint --init
+          tflint --recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Forecaster unit tests
+        run: python -m unittest discover -s k8s/predictive-scaling -v
+
+  plan:
+    needs: validate
+    if: vars.AWS_ROLE_ARN != ''
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write # GitHub OIDC -> AWS STS, no long-lived keys
+    defaults:
+      run:
+        working-directory: terraform/environments/dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: terraform init (remote state)
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="region=us-east-1" \
+            -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE }}"
+
+      - name: terraform plan
+        run: terraform plan -input=false -lock=false -no-color
