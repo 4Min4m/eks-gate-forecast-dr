@@ -2,6 +2,10 @@
 # S3 bucket for Terraform remote state
 # ---------------------------------------------------------------------------
 resource "aws_s3_bucket" "state" {
+  #checkov:skip=CKV_AWS_18:Single-operator state bucket; CloudTrail data events are the production fix rather than a second logging bucket.
+  #checkov:skip=CKV_AWS_144:State is versioned; cross-region replication is out of scope for a single-account demo.
+  #checkov:skip=CKV_AWS_145:SSE-S3 (AES256) is used deliberately; switch to aws:kms + CMK in production (see README).
+  #checkov:skip=CKV2_AWS_62:No consumer for bucket event notifications in this project.
   bucket = var.state_bucket_name
 
   # Guardrail: prevent accidental `terraform destroy` from deleting the bucket
@@ -73,6 +77,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "state" {
     noncurrent_version_expiration {
       noncurrent_days = var.noncurrent_version_expiration_days
     }
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
   }
 }
 
@@ -80,6 +87,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "state" {
 # DynamoDB table for state locking
 # ---------------------------------------------------------------------------
 resource "aws_dynamodb_table" "locks" {
+  #checkov:skip=CKV_AWS_119:Lock table holds only lock IDs and digests; AWS-owned-key encryption is sufficient here.
   name         = var.lock_table_name
   billing_mode = "PAY_PER_REQUEST" # no capacity to manage; cheap for locking
   hash_key     = "LockID"
