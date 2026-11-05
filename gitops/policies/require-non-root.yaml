@@ -14,7 +14,7 @@ spec:
       exclude:
         any:
           - resources:
-              namespaces: ["kube-system", "argocd", "monitoring", "kyverno", "karpenter"]
+              namespaces: ["kube-system", "argocd", "monitoring", "kyverno", "karpenter", "keda"]
       validate:
         message: "Pods must run as non-root (securityContext.runAsNonRoot=true)."
         pattern:
