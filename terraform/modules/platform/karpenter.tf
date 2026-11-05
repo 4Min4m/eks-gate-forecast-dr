@@ -53,10 +53,10 @@ resource "aws_sqs_queue_policy" "karpenter" {
 
 resource "aws_cloudwatch_event_rule" "karpenter" {
   for_each = {
-    spot_interruption   = { source = ["aws.ec2"], detail-type = ["EC2 Spot Instance Interruption Warning"] }
-    rebalance           = { source = ["aws.ec2"], detail-type = ["EC2 Instance Rebalance Recommendation"] }
-    instance_state      = { source = ["aws.ec2"], detail-type = ["EC2 Instance State-change Notification"] }
-    scheduled_change    = { source = ["aws.health"], detail-type = ["AWS Health Event"] }
+    spot_interruption = { source = ["aws.ec2"], detail-type = ["EC2 Spot Instance Interruption Warning"] }
+    rebalance         = { source = ["aws.ec2"], detail-type = ["EC2 Instance Rebalance Recommendation"] }
+    instance_state    = { source = ["aws.ec2"], detail-type = ["EC2 Instance State-change Notification"] }
+    scheduled_change  = { source = ["aws.health"], detail-type = ["AWS Health Event"] }
   }
   name          = "${var.cluster_name}-karpenter-${each.key}"
   event_pattern = jsonencode({ source = each.value.source, "detail-type" = each.value["detail-type"] })
@@ -157,12 +157,12 @@ resource "helm_release" "karpenter_resources" {
   namespace = "kube-system"
 
   values = [yamlencode({
-    clusterName       = var.cluster_name
-    nodeRole          = aws_iam_role.karpenter_node.name
-    discoveryTag      = var.cluster_name
+    clusterName        = var.cluster_name
+    nodeRole           = aws_iam_role.karpenter_node.name
+    discoveryTag       = var.cluster_name
     instanceCategories = var.karpenter_instance_categories
-    capacityTypes     = var.karpenter_capacity_types
-    cpuLimit          = var.karpenter_cpu_limit
+    capacityTypes      = var.karpenter_capacity_types
+    cpuLimit           = var.karpenter_cpu_limit
   })]
 
   depends_on = [helm_release.karpenter]
