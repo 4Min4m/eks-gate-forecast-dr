@@ -14,7 +14,7 @@ spec:
       exclude:
         any:
           - resources:
-              namespaces: ["kube-system", "argocd", "monitoring", "kyverno", "karpenter"]
+              namespaces: ["kube-system", "argocd", "monitoring", "kyverno", "karpenter", "keda"]
       validate:
         message: "CPU and memory limits are required on every container."
         pattern:
