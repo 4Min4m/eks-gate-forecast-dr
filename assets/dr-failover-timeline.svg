@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 420" role="img" aria-labelledby="t d">
+  <title id="t">DR failover timeline</title>
+  <desc id="d">Two regions each run API Gateway and a Lambda over a DynamoDB Global Table, with Route 53 failover in front. When the primary fails, three failed health checks ten seconds apart mark it unhealthy at about 30 seconds; Route 53 then answers with the secondary, and once the 30 second TTL expires all clients reach the secondary. Bounds are derived from configuration; the measured RTO is still to be recorded.</desc>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4a565e"/></marker>
+  </defs>
+  <style>
+    text{font-family:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+    .box{fill:#1b242c;stroke:#2a343c;}
+    .h{font-size:12px;fill:#edf1f3;font-weight:600;}
+    .s{font-size:10.5px;fill:#8fa0a8;}
+    .k{font-size:10px;fill:#5f6e75;}
+    .ea{stroke:#4a565e;stroke-width:1.2;fill:none;marker-end:url(#a);}
+    .red{fill:#d9645a;} .teal{fill:#4fbfae;} .amb{fill:#e2a33d;}
+  </style>
+  <rect width="760" height="420" rx="6" fill="#161e24"/>
+  <text x="24" y="30" class="k">DR POC · FAILOVER PATH</text>
+  <text x="736" y="30" class="k" text-anchor="end">bounds from config (modules/dr) — measured run pending</text>
+
+  <!-- topology -->
+  <rect class="box" x="300" y="46" width="160" height="40" rx="5"/>
+  <text x="380" y="64" class="h" text-anchor="middle">Route 53</text>
+  <text x="380" y="79" class="s" text-anchor="middle">failover · TTL 30s</text>
+  <path class="ea" d="M330,86 L200,108"/><path class="ea" d="M430,86 L560,108" stroke-dasharray="4 3"/>
+
+  <rect x="40" y="110" width="270" height="62" rx="5" fill="rgba(217,100,90,.08)" stroke="#d9645a"/>
+  <text x="56" y="131" class="h">us-east-1 · PRIMARY</text>
+  <text x="56" y="148" class="s">API Gateway → Lambda /dr-check</text>
+  <text x="56" y="163" class="s" style="fill:#d9645a">health check: failing</text>
+
+  <rect x="450" y="110" width="270" height="62" rx="5" fill="rgba(79,191,174,.08)" stroke="#4fbfae"/>
+  <text x="466" y="131" class="h">us-west-2 · SECONDARY</text>
+  <text x="466" y="148" class="s">API Gateway → Lambda /dr-check</text>
+  <text x="466" y="163" class="s" style="fill:#4fbfae">health check: healthy</text>
+
+  <path d="M310,141 H450" stroke="#4a565e" stroke-dasharray="3 3" fill="none"/>
+  <rect x="318" y="128" width="124" height="26" rx="4" fill="#161e24" stroke="#2a343c"/>
+  <text x="380" y="145" class="s" text-anchor="middle">DynamoDB GT</text>
+  <text x="380" y="186" class="k" text-anchor="middle">async replication · RPO ≈ seconds, not 0</text>
+
+  <!-- timeline -->
+  <line x1="60" x2="720" y1="272" y2="272" stroke="#2a343c" stroke-width="2"/>
+  <g class="k" text-anchor="middle">
+    <text x="60" y="292">0s</text><text x="160" y="292">10s</text><text x="260" y="292">20s</text><text x="360" y="292">30s</text>
+    <text x="460" y="292">40s</text><text x="560" y="292">50s</text><text x="660" y="292">60s</text>
+  </g>
+  <rect x="60" y="262" width="300" height="20" fill="rgba(217,100,90,.18)"/>
+  <rect x="360" y="262" width="300" height="20" fill="rgba(226,163,61,.16)"/>
+  <rect x="660" y="262" width="60" height="20" fill="rgba(79,191,174,.18)"/>
+  <circle cx="60" cy="272" r="6" class="red"/>
+  <circle cx="160" cy="272" r="4" class="red"/><circle cx="260" cy="272" r="4" class="red"/><circle cx="360" cy="272" r="6" class="amb"/>
+  <circle cx="660" cy="272" r="6" class="teal"/>
+
+  <text x="60" y="226" class="h" style="font-size:11px">primary breaks</text>
+  <text x="60" y="242" class="s">t = 0</text>
+  <line x1="60" x2="60" y1="248" y2="262" stroke="#d9645a"/>
+  <text x="210" y="226" class="s" text-anchor="middle">3 failed checks</text>
+  <text x="210" y="242" class="k" text-anchor="middle">every 10s</text>
+  <text x="360" y="226" class="h" style="font-size:11px" text-anchor="middle">marked unhealthy</text>
+  <text x="360" y="242" class="s" text-anchor="middle">DNS answers secondary</text>
+  <line x1="360" x2="360" y1="248" y2="262" stroke="#e2a33d"/>
+  <text x="660" y="226" class="h" style="font-size:11px" text-anchor="middle">all clients moved</text>
+  <text x="660" y="242" class="s" text-anchor="middle">cached TTL expired</text>
+  <line x1="660" x2="660" y1="248" y2="262" stroke="#4fbfae"/>
+
+  <text x="210" y="312" class="k" text-anchor="middle">detection ≈ 30s</text>
+  <text x="510" y="312" class="k" text-anchor="middle">+ TTL ≤ 30s</text>
+
+  <!-- result row -->
+  <rect class="box" x="40" y="336" width="330" height="60" rx="5"/>
+  <text x="56" y="358" class="s">config-derived bound</text>
+  <text x="56" y="382" class="h" style="font-size:15px">RTO ≈ 30–60s + client cache</text>
+  <rect x="390" y="336" width="330" height="60" rx="5" fill="none" stroke="#e2a33d" stroke-dasharray="4 3"/>
+  <text x="406" y="358" class="s">measured RTO (record from the test run)</text>
+  <text x="406" y="382" class="h" style="font-size:15px;fill:#e2a33d">____ s</text>
+</svg>

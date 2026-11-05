@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 430" role="img" aria-labelledby="t d">
+  <title id="t">GitOps app-of-apps tree</title>
+  <desc id="d">Git repository feeds Argo CD, whose root application syncs six child applications: httpbin, kube-prometheus-stack, kyverno and kyverno-policies as the tested baseline, and keda and predictive-scaling as proof-of-concept additions. Terraform owns the cluster and IAM layer underneath.</desc>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4a565e"/></marker>
+  </defs>
+  <style>
+    text{font-family:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+    .bg{fill:#161e24;}
+    .box{fill:#1b242c;stroke:#2a343c;}
+    .poc{fill:#1b242c;stroke:#5a4a2a;stroke-dasharray:4 3;}
+    .tf{fill:none;stroke:#2a343c;stroke-dasharray:5 4;}
+    .h{font-size:12.5px;fill:#edf1f3;font-weight:600;}
+    .s{font-size:10.5px;fill:#8fa0a8;}
+    .k{font-size:10px;fill:#5f6e75;}
+    .e{stroke:#4a565e;stroke-width:1.2;fill:none;}
+    .ea{stroke:#4a565e;stroke-width:1.2;fill:none;marker-end:url(#a);}
+    .pt{fill:rgba(79,191,174,.13);} .pa{fill:rgba(226,163,61,.13);}
+    .tt{font-size:10px;fill:#4fbfae;} .ta{font-size:10px;fill:#e2a33d;}
+  </style>
+  <rect class="bg" width="760" height="430" rx="6"/>
+  <text x="24" y="30" class="k">GITOPS · APP OF APPS</text>
+  <text x="736" y="30" class="k" text-anchor="end">diagram — reflects gitops/apps/*.yaml</text>
+
+  <!-- top chain -->
+  <rect class="box" x="70" y="50" width="170" height="54" rx="5"/>
+  <text x="155" y="73" class="h" text-anchor="middle">Git · main</text>
+  <text x="155" y="90" class="s" text-anchor="middle">gitops/ · k8s/</text>
+  <path class="ea" d="M240,77 H292"/>
+  <rect class="box" x="295" y="50" width="170" height="54" rx="5"/>
+  <text x="380" y="73" class="h" text-anchor="middle">Argo CD</text>
+  <text x="380" y="90" class="s" text-anchor="middle">selfHeal · prune</text>
+  <path class="ea" d="M465,77 H517"/>
+  <rect class="box" x="520" y="50" width="170" height="54" rx="5"/>
+  <text x="605" y="73" class="h" text-anchor="middle">root</text>
+  <text x="605" y="90" class="s" text-anchor="middle">watches gitops/apps/</text>
+
+  <!-- bus: root fans out to all six children -->
+  <path class="e" d="M605,104 V124"/>
+  <path class="e" d="M14,124 H632"/>
+  <path class="e" d="M14,124 V234 H632"/>
+  <path class="ea" d="M128,124 V138"/><path class="ea" d="M380,124 V138"/><path class="ea" d="M632,124 V138"/>
+  <!-- row 1 baseline -->
+  <g>
+    <rect class="box" x="24" y="140" width="208" height="84" rx="5"/>
+    <text x="40" y="164" class="h">httpbin</text>
+    <text x="40" y="183" class="s">Kustomize · k8s/</text>
+    <text x="40" y="200" class="s">ns httpbin · 2 ALBs</text>
+    <rect class="pt" x="168" y="152" width="52" height="18" rx="3"/><text x="194" y="165" class="tt" text-anchor="middle">tested</text>
+  </g>
+  <g>
+    <rect class="box" x="276" y="140" width="208" height="84" rx="5"/>
+    <text x="292" y="164" class="h">kube-prom-stack</text>
+    <text x="292" y="183" class="s">Helm · prometheus-community</text>
+    <text x="292" y="200" class="s">ns monitoring · gp3 PVCs</text>
+    <rect class="pt" x="420" y="152" width="52" height="18" rx="3"/><text x="446" y="165" class="tt" text-anchor="middle">tested</text>
+  </g>
+  <g>
+    <rect class="box" x="528" y="140" width="208" height="84" rx="5"/>
+    <text x="544" y="164" class="h">kyverno</text>
+    <text x="544" y="183" class="s">Helm · kyverno 3.2.6</text>
+    <text x="544" y="200" class="s">ns kyverno · admission</text>
+    <rect class="pt" x="672" y="152" width="52" height="18" rx="3"/><text x="698" y="165" class="tt" text-anchor="middle">tested</text>
+  </g>
+
+  <!-- row 2 -->
+  <path class="ea" d="M128,234 V242"/><path class="ea" d="M380,234 V242"/><path class="ea" d="M632,234 V242"/>
+  <g>
+    <rect class="box" x="24" y="244" width="208" height="84" rx="5"/>
+    <text x="40" y="268" class="h">kyverno-policies</text>
+    <text x="40" y="287" class="s">Kustomize · 5 ClusterPolicies</text>
+    <text x="40" y="304" class="s">mode Enforce · retries</text>
+    <rect class="pt" x="168" y="256" width="52" height="18" rx="3"/><text x="194" y="269" class="tt" text-anchor="middle">tested</text>
+  </g>
+  <g>
+    <rect class="poc" x="276" y="244" width="208" height="84" rx="5"/>
+    <text x="292" y="268" class="h">keda</text>
+    <text x="292" y="287" class="s">Helm · kedacore 2.16.0</text>
+    <text x="292" y="304" class="s">sync-wave 1 · IRSA</text>
+    <rect class="pa" x="432" y="256" width="40" height="18" rx="3"/><text x="452" y="269" class="ta" text-anchor="middle">poc</text>
+  </g>
+  <g>
+    <rect class="poc" x="528" y="244" width="208" height="84" rx="5"/>
+    <text x="544" y="268" class="h">predictive-scaling</text>
+    <text x="544" y="287" class="s">CronJob + ScaledObject</text>
+    <text x="544" y="304" class="s">sync-wave 2 · IRSA</text>
+    <rect class="pa" x="684" y="256" width="40" height="18" rx="3"/><text x="704" y="269" class="ta" text-anchor="middle">poc</text>
+  </g>
+  <path class="ea" d="M484,286 H526"/>
+  <text x="505" y="279" class="k" text-anchor="middle">1→2</text>
+
+  <!-- terraform layer -->
+  <rect class="tf" x="24" y="350" width="712" height="56" rx="5"/>
+  <text x="40" y="373" class="h" style="font-size:11.5px">Terraform-owned underneath</text>
+  <text x="40" y="392" class="s">VPC · EKS + KMS · IRSA roles · Karpenter + NodePool · LB controller · EBS CSI · Argo CD install</text>
+</svg>
