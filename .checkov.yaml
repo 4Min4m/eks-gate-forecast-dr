@@ -6,16 +6,16 @@
 # noted in the README's security section. Anything cheap to fix gets fixed,
 # not skipped.
 #
-# This file ships with NO skips. Checkov has not been run against this
-# codebase in a live CI/CD run yet (this golden copy was built without AWS
-# network access) — the first real run in your own GitHub Actions is
-# expected to surface some findings. When it does:
+# This file holds NO global skips. When Checkov reports a finding:
 #   1. Try to fix it first (most findings are a one-line resource change).
-#   2. If a finding is a deliberate trade-off for this demo (e.g. the
-#      httpbin ALB being intentionally internet-facing), add it below with
-#      a comment explaining why, and add the production fix to the README's
-#      "Security summary" section.
+#   2. If it's a deliberate trade-off for this demo, skip it INLINE on that
+#      one resource — `#checkov:skip=<ID>:<reason>` — so the skip can't
+#      silently cover anything else, and add the production fix to the
+#      table in the README's "Security summary".
 # Do not add a skip you can't explain in an interview.
+#
+# Checkov is pinned in CI (.github/workflows/terraform.yml) so new upstream
+# checks arrive as a deliberate version bump, not a surprise red build.
 directory:
   - terraform
 framework:
