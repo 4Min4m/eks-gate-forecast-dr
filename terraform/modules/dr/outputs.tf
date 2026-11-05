@@ -8,8 +8,9 @@ output "secondary_endpoint" {
   description = "Call this directly to test the secondary region."
 }
 
-output "failover_dns_record" {
-  value       = local.create_dns_record ? "${var.record_name}.<your-zone>" : "no hosted_zone_id set — DNS-level failover record was skipped, test the two endpoints directly"
+output "failover_endpoint" {
+  value       = local.create_dns_record ? "https://${local.failover_fqdn}/dr-check" : "no hosted_zone_id set — DNS-level failover record was skipped, test the two endpoints directly"
+  description = "The name clients use; Route 53 answers with the primary or secondary region depending on health."
 }
 
 output "table_name" {
