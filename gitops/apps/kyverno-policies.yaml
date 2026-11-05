@@ -10,7 +10,7 @@ metadata:
 spec:
   project: eks-httpbin-alb
   source:
-    repoURL: https://github.com/4Min4m/eks-httpbin-alb.git
+    repoURL: https://github.com/4Min4m/eks-gate-forecast-dr.git
     targetRevision: main
     path: gitops/policies
   destination:
