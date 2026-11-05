@@ -3,14 +3,23 @@ locals {
 }
 
 data "aws_availability_zones" "available" {
+  #checkov:skip=CKV_AWS_394:Only the first var.az_count zones (sorted by name) are used, and new AZs sort after existing ones, so an added zone never moves these subnets.
   state = "available"
 }
 
 resource "aws_vpc" "main" {
+  #checkov:skip=CKV2_AWS_11:Flow logs omitted to keep the demo's standing cost down; production fix in README "Security summary".
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
   tags                 = { Name = "${var.cluster_name}-vpc" }
+}
+
+# Strip all rules from the VPC's default security group so nothing that
+# falls back to it by accident gets any traffic.
+resource "aws_default_security_group" "default" {
+  vpc_id = aws_vpc.main.id
+  tags   = { Name = "${var.cluster_name}-default-sg-locked" }
 }
 
 resource "aws_internet_gateway" "main" {
@@ -19,16 +28,19 @@ resource "aws_internet_gateway" "main" {
 }
 
 resource "aws_subnet" "public" {
-  count                   = var.az_count
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = cidrsubnet(var.vpc_cidr, 8, count.index)
-  availability_zone       = data.aws_availability_zones.available.names[count.index]
-  map_public_ip_on_launch = true
+  count             = var.az_count
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index)
+  availability_zone = data.aws_availability_zones.available.names[count.index]
+  # Public subnets only hold the internet-facing ALB and the NAT gateways
+  # (which use Elastic IPs), so nothing here needs an auto-assigned public IP.
+  map_public_ip_on_launch = false
+  # Deliberately NO karpenter.sh/discovery tag: Karpenter selects subnets by
+  # that tag, and application nodes must only ever land in private subnets.
   tags = {
     Name                                        = "${var.cluster_name}-public-${count.index + 1}"
     "kubernetes.io/cluster/${var.cluster_name}" = "owned"
     "kubernetes.io/role/elb"                    = "1"
-    "karpenter.sh/discovery"                    = var.cluster_name
   }
 }
 
