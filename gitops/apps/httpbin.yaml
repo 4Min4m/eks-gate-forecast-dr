@@ -11,12 +11,20 @@ metadata:
 spec:
   project: eks-httpbin-alb
   source:
-    repoURL: https://github.com/4Min4m/eks-httpbin-alb.git
+    repoURL: https://github.com/4Min4m/eks-gate-forecast-dr.git
     targetRevision: main
     path: k8s
   destination:
     server: https://kubernetes.default.svc
     namespace: httpbin
+  # replicas: 2 in Git is the starting point; once KEDA (or the reactive HPA
+  # baseline) scales the Deployment, Argo CD must not "heal" it back to 2.
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      name: httpbin
+      jsonPointers:
+        - /spec/replicas
   syncPolicy:
     automated:
       prune: true
@@ -24,6 +32,7 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ApplyOutOfSyncOnly=true
+      - RespectIgnoreDifferences=true
     retry:
       limit: 5
       backoff:
