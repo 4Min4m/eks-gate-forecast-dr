@@ -3,76 +3,115 @@
 Predictive/proactive autoscaling forecaster — Phase 3 POC.
 
 WHAT THIS IS: a small script, run every few minutes by a Kubernetes CronJob,
-that looks at recent ALB request-rate history and publishes a *forecasted*
+that looks at ALB request-rate history and publishes a *forecasted*
 desired-replica-count as a custom CloudWatch metric. KEDA's aws-cloudwatch
-scaler then reads that metric and scales the httpbin Deployment ahead of the
-traffic it expects, instead of only reacting after load has already arrived
-(what a plain HPA does).
+scaler reads that metric and scales the httpbin Deployment for the traffic
+expected over the next few minutes, instead of only reacting after load has
+already arrived (what a plain HPA does).
 
-WHAT THIS DELIBERATELY IS NOT: a trained ML model. The "forecast" is
-classical time-series smoothing — a weighted moving average with a
-same-time-yesterday seasonal nudge. That's an honest, defensible choice for
-a POC: it's cheap, explainable in one sentence, and good enough to
-demonstrate the *mechanism* (proactive vs reactive scaling), which is the
-actual point of this exercise. A real predictive-scaling system in
-production would likely use Amazon Forecast, or a proper trained model —
-described here as a named next step, not implemented.
+THE FORECAST (classical, explainable — deliberately not a trained model):
+the demand expected over the next HORIZON_MINUTES is the largest of
+  1. level     — the request rate right now (mean of the last few minutes),
+  2. trend     — that level extrapolated HORIZON_MINUTES ahead along the
+                 recent slope (catches a ramp that is already under way),
+  3. seasonal  — the peak of the *same upcoming window one period ago*
+                 (catches a ramp that hasn't started yet but happened at
+                 this point in the cycle last time).
+Taking the maximum biases toward scaling out early; scaling back in is left
+to KEDA's cooldown, because briefly having a pod too many is cheaper than
+being short during a ramp.
+
+The seasonal term is what makes this *proactive*. The period is
+SEASONAL_PERIOD_MINUTES: 1440 (daily) is the realistic setting, but for the
+reactive-vs-proactive demo it's set to 60 so the HPA-baseline run of the k6
+ramp becomes the "history" for the KEDA run an hour later (see README).
 
 WHY CLOUDWATCH FOR HISTORY, NOT PROMETHEUS: go-httpbin exposes no /metrics
-endpoint (see main README), so there's no in-cluster request-rate signal to
-scrape. The ALB, however, already publishes `RequestCount` to CloudWatch
-(AWS/ApplicationELB namespace) with zero extra instrumentation — so that's
-the source of truth here.
+endpoint, so there's no in-cluster request-rate signal to scrape. The ALB
+already publishes `RequestCount` to CloudWatch with zero instrumentation.
 
-WHY THE ALB IS DISCOVERED AT RUNTIME, NOT PASSED IN AS A TERRAFORM OUTPUT:
-the ALB itself is created by the AWS Load Balancer Controller reconciling
-the Ingress (see k8s/ingress-public.yaml), not by Terraform — Terraform
-never sees its ARN. But the ingress pins a stable
-`alb.ingress.kubernetes.io/load-balancer-name`, so this script resolves that
-fixed name to today's ARN (and CloudWatch dimension) via the AWS API on
-every run — the correct way to bridge a GitOps-created resource back into
-an AWS API call, without hardcoding an ARN that would go stale on ALB
-recreation.
+WHY THE ALB IS DISCOVERED AT RUNTIME: the ALB is created by the AWS Load
+Balancer Controller from the Ingress (GitOps), not by Terraform, so its ARN
+isn't known ahead of time. The Ingress pins a stable load-balancer-name;
+this script resolves that name to today's CloudWatch dimension on every run.
 """
 import datetime
 import math
 import os
 import sys
 
-import boto3
-
 REGION = os.environ.get("AWS_REGION", "us-east-1")
 ALB_NAME = os.environ.get("ALB_NAME", "httpbin-public-alb")
 CUSTOM_NAMESPACE = os.environ.get("CUSTOM_METRIC_NAMESPACE", "httpbin/predictive-scaling")
 METRIC_NAME = os.environ.get("CUSTOM_METRIC_NAME", "DesiredReplicas")
 
-# How many requests one pod comfortably handles per minute — a rough,
-# stated assumption, not a load-tested constant. Tune this from your own
-# load test (see predictive-scaling/loadtest/ in the study guide) before
-# trusting the numbers this produces.
+# How many requests one pod comfortably handles per minute — a stated
+# assumption, not a load-tested constant. Tune from your own load test.
 REQUESTS_PER_POD_PER_MINUTE = int(os.environ.get("REQUESTS_PER_POD_PER_MINUTE", "300"))
 MIN_REPLICAS = int(os.environ.get("MIN_REPLICAS", "2"))
 MAX_REPLICAS = int(os.environ.get("MAX_REPLICAS", "20"))
 
-LOOKBACK_MINUTES = 60          # recent window used for the moving average
-SEASONAL_LOOKBACK_HOURS = 24   # how far back to look for "same time yesterday"
-FORECAST_HORIZON_MINUTES = 10  # how far ahead we're forecasting for
+HORIZON_MINUTES = int(os.environ.get("HORIZON_MINUTES", "10"))
+SEASONAL_PERIOD_MINUTES = int(os.environ.get("SEASONAL_PERIOD_MINUTES", "1440"))
+LEVEL_MINUTES = 3   # "now" = mean of the last 3 complete minutes
+TREND_MINUTES = 10  # slope fitted over the last 10 minutes
 
 
-def resolve_alb_dimension(elbv2_client) -> str:
-    """Resolve the fixed ALB name to today's CloudWatch dimension value
-    ('app/<name>/<id>'), since the ALB is GitOps-managed and its ARN isn't
-    known to Terraform."""
+# ---------------------------------------------------------------------------
+# Pure forecasting logic (no AWS calls) — unit-tested in test_forecast.py.
+# A series is a list of per-minute request counts, oldest first.
+# ---------------------------------------------------------------------------
+def level(recent):
+    window = recent[-LEVEL_MINUTES:]
+    return sum(window) / len(window) if window else 0.0
+
+
+def slope(recent):
+    """Least-squares slope (requests/min per minute) over the trend window."""
+    ys = recent[-TREND_MINUTES:]
+    n = len(ys)
+    if n < 2:
+        return 0.0
+    mean_x = (n - 1) / 2
+    mean_y = sum(ys) / n
+    num = sum((x - mean_x) * (y - mean_y) for x, y in enumerate(ys))
+    den = sum((x - mean_x) ** 2 for x in range(n))
+    return num / den
+
+
+def forecast_rpm(recent, seasonal_ahead, horizon=HORIZON_MINUTES):
+    """Expected peak requests/minute over the next `horizon` minutes."""
+    now_level = level(recent)
+    trend = now_level + max(0.0, slope(recent)) * horizon
+    seasonal = max(seasonal_ahead) if seasonal_ahead else 0.0
+    return max(now_level, trend, seasonal)
+
+
+def desired_replicas(rpm, per_pod=REQUESTS_PER_POD_PER_MINUTE,
+                     min_replicas=MIN_REPLICAS, max_replicas=MAX_REPLICAS):
+    wanted = math.ceil(rpm / per_pod) if rpm > 0 else min_replicas
+    return max(min_replicas, min(max_replicas, wanted))
+
+
+# ---------------------------------------------------------------------------
+# AWS I/O
+# ---------------------------------------------------------------------------
+def resolve_alb_dimension(elbv2_client):
+    """Fixed ALB name -> today's CloudWatch dimension value ('app/<name>/<id>')."""
     resp = elbv2_client.describe_load_balancers(Names=[ALB_NAME])
     lbs = resp.get("LoadBalancers", [])
     if not lbs:
-        raise RuntimeError(f"No load balancer found named '{ALB_NAME}' — has the Ingress synced yet?")
+        raise RuntimeError(f"No load balancer named '{ALB_NAME}' — has the Ingress synced yet?")
     arn = lbs[0]["LoadBalancerArn"]
     # arn:aws:elasticloadbalancing:<region>:<acct>:loadbalancer/app/<name>/<id>
     return "/".join(arn.split("/")[-3:])
 
 
-def fetch_request_count(cw_client, dimension_value: str, start, end):
+def fetch_per_minute(cw_client, dimension_value, start, end):
+    """Per-minute RequestCount between start and end, oldest first.
+
+    CloudWatch omits minutes with no requests, so missing minutes are filled
+    with 0 rather than silently shortening the series."""
     resp = cw_client.get_metric_data(
         MetricDataQueries=[{
             "Id": "requests",
@@ -89,64 +128,34 @@ def fetch_request_count(cw_client, dimension_value: str, start, end):
         StartTime=start,
         EndTime=end,
     )
-    values = resp["MetricDataResults"][0]["Values"]
-    timestamps = resp["MetricDataResults"][0]["Timestamps"]
-    # CloudWatch returns newest-first; sort oldest-first for a clean series.
-    series = sorted(zip(timestamps, values))
-    return [v for _, v in series]
-
-
-def weighted_moving_average(series):
-    """Linearly weight recent minutes more heavily than older ones."""
-    if not series:
-        return 0.0
-    weights = list(range(1, len(series) + 1))
-    return sum(v * w for v, w in zip(series, weights)) / sum(weights)
-
-
-def forecast_requests_per_minute(cw_client, elbv2_client, now) -> float:
-    dim = resolve_alb_dimension(elbv2_client)
-
-    recent = fetch_request_count(
-        cw_client, dim,
-        start=now - datetime.timedelta(minutes=LOOKBACK_MINUTES),
-        end=now,
-    )
-    baseline = weighted_moving_average(recent)
-
-    # Seasonal nudge: if we have data from ~this time yesterday, blend it in.
-    # This is what lets the forecast anticipate a *known, recurring* ramp
-    # (e.g. a daily traffic pattern) instead of only extrapolating the last
-    # hour — the thing a plain reactive HPA structurally can't do.
-    seasonal_start = now - datetime.timedelta(hours=SEASONAL_LOOKBACK_HOURS, minutes=LOOKBACK_MINUTES // 2)
-    seasonal_end = now - datetime.timedelta(hours=SEASONAL_LOOKBACK_HOURS - (LOOKBACK_MINUTES // 2) / 60)
-    try:
-        seasonal = fetch_request_count(cw_client, dim, seasonal_start, seasonal_end)
-        seasonal_avg = weighted_moving_average(seasonal) if seasonal else None
-    except Exception:
-        seasonal_avg = None
-
-    if seasonal_avg and seasonal_avg > 0:
-        forecast = 0.6 * baseline + 0.4 * seasonal_avg
-    else:
-        forecast = baseline
-
-    return forecast
+    result = resp["MetricDataResults"][0]
+    by_minute = {ts.replace(second=0, microsecond=0): v
+                 for ts, v in zip(result["Timestamps"], result["Values"])}
+    minutes = int((end - start).total_seconds() // 60)
+    return [by_minute.get(start + datetime.timedelta(minutes=i), 0.0) for i in range(minutes)]
 
 
 def main():
+    import boto3  # imported here so the pure functions can be tested without boto3
+
     session = boto3.Session(region_name=REGION)
     cw = session.client("cloudwatch")
     elbv2 = session.client("elbv2")
 
-    now = datetime.datetime.utcnow()
-    forecast_rpm = forecast_requests_per_minute(cw, elbv2, now)
+    # Work on whole minutes, and skip the current (still-filling) minute.
+    now = datetime.datetime.now(datetime.timezone.utc).replace(second=0, microsecond=0)
+    dim = resolve_alb_dimension(elbv2)
 
-    desired = math.ceil(forecast_rpm / REQUESTS_PER_POD_PER_MINUTE) if forecast_rpm > 0 else MIN_REPLICAS
-    desired = max(MIN_REPLICAS, min(MAX_REPLICAS, desired))
+    recent = fetch_per_minute(cw, dim, now - datetime.timedelta(minutes=TREND_MINUTES), now)
+    past = now - datetime.timedelta(minutes=SEASONAL_PERIOD_MINUTES)
+    seasonal_ahead = fetch_per_minute(cw, dim, past, past + datetime.timedelta(minutes=HORIZON_MINUTES))
 
-    print(f"[{now.isoformat()}Z] forecast_rpm={forecast_rpm:.1f} "
-          f"requests_per_pod_per_min={REQUESTS_PER_POD_PER_MINUTE} -> desired_replicas={desired}")
+    rpm = forecast_rpm(recent, seasonal_ahead)
+    desired = desired_replicas(rpm)
+
+    print(f"[{now.isoformat()}] level={level(recent):.0f}rpm slope={slope(recent):.1f} "
+          f"seasonal_peak={max(seasonal_ahead, default=0):.0f}rpm (period={SEASONAL_PERIOD_MINUTES}m) "
+          f"-> forecast={rpm:.0f}rpm over next {HORIZON_MINUTES}m -> desired_replicas={desired}")
 
     cw.put_metric_data(
         Namespace=CUSTOM_NAMESPACE,
@@ -162,6 +171,6 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except Exception as exc:  # noqa: BLE001 — CronJob: log and exit non-zero, don't crash-loop silently
+    except Exception as exc:  # noqa: BLE001 — CronJob: log and exit non-zero
         print(f"predictive-scaler FAILED: {exc}", file=sys.stderr)
         sys.exit(1)
