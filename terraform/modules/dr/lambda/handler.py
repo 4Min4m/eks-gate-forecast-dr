@@ -5,7 +5,7 @@ WHY A LAMBDA INSTEAD OF ADDING A ROUTE TO go-httpbin: go-httpbin is a
 prebuilt third-party image (mccutchen/go-httpbin) with no source in this
 repo to add a custom handler to. Forking and maintaining a custom image just
 for one trivial DR-test endpoint would be a bigger, messier change than the
-PLAN's "keep the app-layer change minimal" intent. A tiny Lambda behind its
+"keep the app-layer change minimal" intent of this phase. A tiny Lambda behind its
 own API path is a smaller blast radius, needs no image build/push/ECR step,
 and is trivially deployable to a second region — which is the actual point
 of this exercise.
@@ -37,7 +37,7 @@ def handler(event, context):
         item = {
             "id": ITEM_ID,
             "written_by_region": REGION,
-            "written_at": datetime.datetime.utcnow().isoformat() + "Z",
+            "written_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         }
         table.put_item(Item=item)
         body = {"action": "write", **item}
