@@ -3,11 +3,25 @@ data "tls_certificate" "eks" {
 }
 
 # KMS: envelope encryption for Kubernetes secrets
+data "aws_caller_identity" "current" {}
+
 resource "aws_kms_key" "eks" {
   description             = "Envelope encryption key for EKS ${var.cluster_name} secrets"
   deletion_window_in_days = 10
   enable_key_rotation     = true
-  tags                    = { Name = "${var.cluster_name}-eks-kms" }
+  # Explicit key policy (this is what AWS applies by default, written down so
+  # it's reviewable): the account's IAM policies govern who may use the key.
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid       = "EnableIAMPolicies"
+      Effect    = "Allow"
+      Principal = { AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root" }
+      Action    = "kms:*"
+      Resource  = "*"
+    }]
+  })
+  tags = { Name = "${var.cluster_name}-eks-kms" }
 }
 
 resource "aws_kms_alias" "eks" {
@@ -36,15 +50,19 @@ resource "aws_iam_role_policy_attachment" "cluster_vpc_resource_controller" {
 
 # Control-plane security group
 resource "aws_security_group" "cluster" {
+  #checkov:skip=CKV_AWS_382:Control-plane ENIs need open egress to reach node kubelets, webhooks and AWS APIs; standard EKS pattern.
   name_prefix = "${var.cluster_name}-cluster-sg"
+  description = "Additional security group for the ${var.cluster_name} EKS control plane"
   vpc_id      = var.vpc_id
   ingress {
+    description = "Kubernetes API from inside the VPC"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
     cidr_blocks = [var.vpc_cidr]
   }
   egress {
+    description = "Control plane to nodes, webhooks and AWS APIs"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -58,6 +76,7 @@ resource "aws_security_group" "cluster" {
 
 # The cluster
 resource "aws_eks_cluster" "main" {
+  #checkov:skip=CKV_AWS_39:Public endpoint is kept for operator/CI access but locked to explicit CIDRs (variable validation rejects 0.0.0.0/0).
   name     = var.cluster_name
   role_arn = aws_iam_role.cluster.arn
   version  = var.cluster_version
@@ -137,4 +156,15 @@ resource "aws_eks_node_group" "system" {
 
   depends_on = [aws_iam_role_policy_attachment.nodes]
   tags       = { Name = "${var.cluster_name}-system-node" }
+}
+
+# Karpenter picks node security groups by the karpenter.sh/discovery tag.
+# The EKS-managed cluster security group (created by EKS itself, not above)
+# is what lets nodes talk to the control plane, to each other and to CoreDNS
+# on the system nodes — so Karpenter-launched nodes must get it too. Without
+# this tag they'd only get the additional SG above (443 ingress only).
+resource "aws_ec2_tag" "cluster_sg_karpenter_discovery" {
+  resource_id = aws_eks_cluster.main.vpc_config[0].cluster_security_group_id
+  key         = "karpenter.sh/discovery"
+  value       = var.cluster_name
 }
