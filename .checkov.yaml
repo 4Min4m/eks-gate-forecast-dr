@@ -1,21 +1,5 @@
 # Checkov configuration for this repo's Terraform.
 #
-# Philosophy carried over from the retired aws-devsecops-pipeline project:
-# no blanket suppression. Every skip must be a conscious, documented
-# trade-off, with a written justification here AND a production remediation
-# noted in the README's security section. Anything cheap to fix gets fixed,
-# not skipped.
-#
-# This file holds NO global skips. When Checkov reports a finding:
-#   1. Try to fix it first (most findings are a one-line resource change).
-#   2. If it's a deliberate trade-off for this demo, skip it INLINE on that
-#      one resource — `#checkov:skip=<ID>:<reason>` — so the skip can't
-#      silently cover anything else, and add the production fix to the
-#      table in the README's "Security summary".
-# Do not add a skip you can't explain in an interview.
-#
-# Checkov is pinned in CI (.github/workflows/terraform.yml) so new upstream
-# checks arrive as a deliberate version bump, not a surprise red build.
 directory:
   - terraform
 framework:
