@@ -21,6 +21,7 @@ resource "aws_apigatewayv2_integration" "dr_primary" {
 }
 
 resource "aws_apigatewayv2_route" "dr_primary" {
+  #checkov:skip=CKV_AWS_309:Intentionally unauthenticated: Route 53 health checks cannot sign requests. Read-only GET plus a singleton test write, throttled at the stage.
   for_each  = var.enable_dr_poc ? toset(local.dr_routes) : toset([])
   api_id    = aws_apigatewayv2_api.dr_primary[0].id
   route_key = each.value
@@ -32,6 +33,13 @@ resource "aws_apigatewayv2_stage" "dr_primary" {
   api_id      = aws_apigatewayv2_api.dr_primary[0].id
   name        = "$default"
   auto_deploy = true
+
+  # The endpoint is public (see the route skip above), so cap what anyone
+  # can push through it.
+  default_route_settings {
+    throttling_burst_limit = 20
+    throttling_rate_limit  = 10
+  }
 }
 
 resource "aws_lambda_permission" "dr_primary" {
@@ -61,6 +69,7 @@ resource "aws_apigatewayv2_integration" "dr_secondary" {
 }
 
 resource "aws_apigatewayv2_route" "dr_secondary" {
+  #checkov:skip=CKV_AWS_309:Intentionally unauthenticated: Route 53 health checks cannot sign requests. Read-only GET plus a singleton test write, throttled at the stage.
   for_each  = var.enable_dr_poc ? toset(local.dr_routes) : toset([])
   provider  = aws.secondary
   api_id    = aws_apigatewayv2_api.dr_secondary[0].id
@@ -74,6 +83,13 @@ resource "aws_apigatewayv2_stage" "dr_secondary" {
   api_id      = aws_apigatewayv2_api.dr_secondary[0].id
   name        = "$default"
   auto_deploy = true
+
+  # The endpoint is public (see the route skip above), so cap what anyone
+  # can push through it.
+  default_route_settings {
+    throttling_burst_limit = 20
+    throttling_rate_limit  = 10
+  }
 }
 
 resource "aws_lambda_permission" "dr_secondary" {
