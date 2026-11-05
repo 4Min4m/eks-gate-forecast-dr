@@ -14,7 +14,7 @@ spec:
       exclude:
         any:
           - resources:
-              namespaces: ["kube-system", "argocd", "monitoring", "kyverno", "karpenter"]
+              namespaces: ["kube-system", "argocd", "monitoring", "kyverno", "karpenter", "keda"]
       validate:
         message: "allowPrivilegeEscalation must be set to false."
         pattern:
