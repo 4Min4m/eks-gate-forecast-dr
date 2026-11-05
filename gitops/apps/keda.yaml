@@ -24,17 +24,21 @@ spec:
     targetRevision: "2.16.0" # verify & pin with `helm search repo kedacore/keda --versions`
     helm:
       values: |
-        serviceAccount:
-          create: true
-          name: keda-operator
-          annotations:
-            eks.amazonaws.com/role-arn: "arn:aws:iam::CHANGE-ME-ACCOUNT-ID:role/httpbin-dev-keda-operator-role"
+        # IRSA for the operator's service account (keda/keda-operator — the
+        # name the Terraform trust policy expects). CHANGE-ME: paste
+        # `terraform output keda_operator_role_arn`.
+        podIdentity:
+          aws:
+            irsa:
+              enabled: true
+              roleArn: "arn:aws:iam::CHANGE-ME-ACCOUNT-ID:role/httpbin-dev-keda-operator-role"
         resources:
           operator:
             requests:
               cpu: 100m
               memory: 100Mi
             limits:
+              cpu: "1"
               memory: 500Mi
   destination:
     server: https://kubernetes.default.svc
