@@ -1,10 +1,8 @@
 # TriggerAuthentication tells KEDA to use the KEDA operator's own IRSA
 # identity (pod identity) rather than static keys — same "no long-lived
 # credentials" principle as everything else in this platform.
-#
-# NOTE: KEDA's scaler field names occasionally shift between minor versions
-# — verify `identityOwner`/`podIdentity.provider` against the docs for
-# whichever KEDA version gitops/apps/keda.yaml pins before relying on this.
+# `provider: aws` with identityOwner `keda` = use the KEDA operator's IRSA
+# role (keda.yaml). The older `aws-eks` provider is deprecated.
 apiVersion: keda.sh/v1alpha1
 kind: TriggerAuthentication
 metadata:
@@ -12,7 +10,8 @@ metadata:
   namespace: httpbin
 spec:
   podIdentity:
-    provider: aws-eks
+    provider: aws
+    identityOwner: keda
 ---
 # Scales the httpbin Deployment off the forecast metric the CronJob
 # publishes, instead of off live load — the actual mechanism under test in
@@ -42,6 +41,15 @@ spec:
         metricName: "DesiredReplicas"
         dimensionName: "Service"
         dimensionValue: "httpbin"
+        # Read the newest 1-minute datapoint from the last 10 minutes. The
+        # CronJob publishes every 5 minutes, so a 10-minute window always
+        # holds its latest value (KEDA uses the newest point returned).
+        metricStat: "Maximum"
+        metricStatPeriod: "60"
+        metricCollectionTime: "600"
+        metricEndTimeOffset: "0"
         targetMetricValue: "1"
-        minMetricValue: "1"
+        # Used only if no datapoint is found (e.g. the CronJob is failing):
+        # fall back to the floor rather than scaling to zero.
+        minMetricValue: "2"
         awsRegion: "us-east-1"
