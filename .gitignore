@@ -1,0 +1,15 @@
+# Terraform
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+backend.hcl
+
+# Built by the DR module's archive_file at plan time
+terraform/modules/dr/lambda/*.zip
+
+# Python
+__pycache__/
+*.pyc
