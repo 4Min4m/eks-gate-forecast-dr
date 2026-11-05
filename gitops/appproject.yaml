@@ -11,9 +11,10 @@ spec:
   description: HTTPBin platform and application manifests
 
   sourceRepos:
-    - https://github.com/CHANGE-ME/eks-httpbin-alb.git # CHANGE-ME
+    - https://github.com/4Min4m/eks-gate-forecast-dr.git
     - https://prometheus-community.github.io/helm-charts
     - https://kyverno.github.io/kyverno
+    - https://kedacore.github.io/charts
 
   destinations:
     - server: https://kubernetes.default.svc
@@ -24,6 +25,8 @@ spec:
       namespace: monitoring
     - server: https://kubernetes.default.svc
       namespace: kyverno
+    - server: https://kubernetes.default.svc
+      namespace: keda
 
   # Monitoring operator and Kyverno install cluster-scoped CRDs/ClusterRoles.
   clusterResourceWhitelist:
