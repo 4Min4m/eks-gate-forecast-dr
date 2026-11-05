@@ -25,7 +25,7 @@ tags = {
 }
 
 # DR proof-of-concept (Phase 4) — leave enable_dr_poc = false until you're
-# actually running the failover exercise (see the study guide). Flip to
+# actually running the failover exercise (see README "Disaster recovery"). Flip to
 # true, apply, run the test, record your RTO, then flip back to false and
 # apply again to tear it all down.
 enable_dr_poc       = false
