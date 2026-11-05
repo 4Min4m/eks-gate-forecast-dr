@@ -3,8 +3,8 @@ variable "enable_dr_poc" {
   default     = false
   description = <<-EOT
     Master switch for the entire DR proof-of-concept. Defaults to false so
-    this never deploys (and never costs anything) by accident. Per PLAN's
-    own non-goal, this is meant to be flipped true only for the duration of
+    this never deploys (and never costs anything) by accident. By design,
+    this is meant to be flipped true only for the duration of
     a real failover test, then flipped back and applied again to tear
     everything down — not left running.
   EOT
@@ -33,7 +33,7 @@ variable "hosted_zone_id" {
     POC — if blank, DR resources (DynamoDB, Lambda, API Gateways, health
     checks) still deploy, but the Route 53 failover record is skipped.
     You can still test failover by watching the two health checks' status
-    directly (see the study guide's Phase 4 exercise) without owning a
+    directly (see the README's "Disaster recovery" section) without owning a
     domain, or register a low-cost one and set this before testing the
     full DNS-level failover.
   EOT
