@@ -11,7 +11,7 @@ metadata:
 spec:
   project: eks-httpbin-alb
   source:
-    repoURL: https://github.com/CHANGE-ME/eks-httpbin-alb.git # CHANGE-ME
+    repoURL: https://github.com/4Min4m/eks-gate-forecast-dr.git
     targetRevision: main
     path: gitops/apps
     directory:
