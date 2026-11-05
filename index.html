@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Gate. Forecast. Failover. — EKS Platform</title>
-<meta name="description" content="A GitOps-managed EKS platform with a blocking security gate, KEDA-driven predictive autoscaling, and a tested DynamoDB/Route 53 disaster-recovery path.">
+<meta name="description" content="A GitOps-managed EKS platform with a blocking security gate, KEDA-driven predictive autoscaling, and a DynamoDB/Route 53 disaster-recovery path.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -215,6 +215,11 @@
   }
   .ph .ph-desc{font-size:13px; color:var(--muted-dim); max-width:46ch; margin:0 auto;}
 
+  /* ---- figures ---- */
+  .shot{margin:24px 0 0 0;}
+  .shot img{display:block; width:100%; height:auto; border:1px solid var(--border); border-radius:6px; background:var(--panel);}
+  .shot figcaption{font-family:var(--mono); font-size:12px; color:var(--muted-dim); margin-top:10px; max-width:70ch;}
+
   /* ---- footer ---- */
   footer{
     max-width:760px;
@@ -231,7 +236,8 @@
   footer .name{font-family:var(--mono); font-size:13px; color:var(--muted-dim);}
 
   @media (max-width:860px){
-    .shell{grid-template-columns:1fr;}
+    .shell{grid-template-columns:minmax(0,1fr);}
+    .rail-top{min-width:0;}
     .rail{
       position:relative; height:auto; top:auto;
       flex-direction:row; align-items:center; justify-content:space-between;
@@ -275,8 +281,8 @@
       <p class="sub">A tested EKS platform, not just a diagram of one. Terraform and GitOps
         run an EKS cluster with cost-aware autoscaling and policy enforcement out of the box.
         On top of that baseline: a blocking DevSecOps CI gate, a proactive autoscaler that
-        scales ahead of predictable traffic, and a disaster-recovery path with a measured
-        recovery time.</p>
+        scales ahead of predictable traffic, and a disaster-recovery path built to have its
+        recovery time measured, not quoted.</p>
       <div class="cta">
         <a class="btn primary" href="https://github.com/4Min4m/eks-gate-forecast-dr" target="_blank" rel="noopener">View the repository</a>
         <a class="btn" href="#phases">Read the build log</a>
@@ -358,10 +364,10 @@
         <tr><td>Resilience</td><td>DynamoDB Global Tables + Route 53 failover</td><td><span class="badge poc"><span class="dot"></span>poc</span></td></tr>
       </table>
 
-      <div class="ph">
-        <span class="ph-label">[ screenshot ]</span>
-        <span class="ph-desc">Argo CD UI showing all four apps Synced and Healthy, plus a Grafana panel with live cluster metrics — from the Phase 1 baseline verification.</span>
-      </div>
+      <figure class="shot">
+        <img src="assets/gitops-app-tree.svg" alt="Argo CD app-of-apps tree: six child applications, four baseline and two proof-of-concept, synced from this repository." loading="lazy" width="760">
+        <figcaption>The app-of-apps tree from <code>gitops/apps/</code>: four baseline applications plus the two proof-of-concept additions, deployed in sync waves.</figcaption>
+      </figure>
     </section>
 
     <section id="architecture" class="wide">
@@ -385,24 +391,24 @@
         <div class="gate-row"><span class="label">iac</span><p>Checkov against the Terraform, with a no-blanket-suppression policy: every skip needs a written reason and a documented production fix.</p></div>
       </div>
 
-      <div class="ph">
-        <span class="ph-label">[ screenshot ]</span>
-        <span class="ph-desc">A failed Actions run showing a deliberately planted secret caught by gitleaks — the Phase 2 checkpoint that proves the gate actually blocks something.</span>
-      </div>
+      <figure class="shot">
+        <img src="assets/ci-security-gate.svg" alt="CI pipeline diagram: the security-gate job fails on a planted secret, so validate and plan never run." loading="lazy" width="760">
+        <figcaption>Pipeline design: a deliberately planted secret fails the gitleaks step, and the downstream validate and plan jobs never run.</figcaption>
+      </figure>
     </section>
 
     <section id="scaling">
       <h2>Scaling ahead of the load, not after it <span class="badge poc"><span class="dot"></span>poc</span></h2>
-      <p>A CronJob reads recent ALB request-rate history from CloudWatch, blends in a
-        same-time-yesterday signal, and publishes a forecasted replica count as a custom metric.
-        KEDA scales the app off that forecast instead of live load — the one thing a reactive HPA
-        structurally can't do. It's classical time-series smoothing, not a trained model, and the
-        README says that plainly too.</p>
+      <p>A CronJob reads ALB request-rate history from CloudWatch and publishes the replica
+        count needed for the next ten minutes: the larger of today's trend and what the same
+        window looked like one cycle ago. KEDA scales the app off that forecast instead of live
+        load — the one thing a reactive HPA structurally can't do. It's classical and explainable,
+        not a trained model, and its logic is unit-tested against a replay of the load test.</p>
 
-      <div class="ph">
-        <span class="ph-label">[ chart or GIF ]</span>
-        <span class="ph-desc">Two Grafana screenshots of pod count over time, same synthetic traffic ramp: one under a plain reactive HPA, one under the KEDA forecast — side by side.</span>
-      </div>
+      <figure class="shot">
+        <img src="assets/scaling-reactive-vs-forecast.svg" alt="Concept chart: under the same traffic ramp, a reactive HPA lags demand while the forecast-driven scaler adds pods ahead of it." loading="lazy" width="760">
+        <figcaption>Concept illustration of the comparison this phase is built to record — the side-by-side Grafana capture from the real load test replaces it.</figcaption>
+      </figure>
     </section>
 
     <section id="dr">
@@ -417,10 +423,10 @@
         <tr><td>RPO</td><td>near-zero, not zero — Global Tables replicate asynchronously</td><td></td></tr>
       </table>
 
-      <div class="ph">
-        <span class="ph-label">[ screenshot or log ]</span>
-        <span class="ph-desc">The actual failover test: health check flipping to Unhealthy, the DNS record switching, and the measured RTO written down — not just quoted from a config file.</span>
-      </div>
+      <figure class="shot">
+        <img src="assets/dr-failover-timeline.svg" alt="DR failover timeline: three failed health checks over about 30 seconds, then Route 53 answers with the secondary region once the TTL expires." loading="lazy" width="760">
+        <figcaption>Failover path with the bounds the configuration implies; the measured RTO from the test run goes in the empty box.</figcaption>
+      </figure>
     </section>
 
     <section id="phases">
@@ -440,19 +446,19 @@
         </div>
         <div class="t-item poc">
           <div class="t-num">2</div>
-          <div class="t-body"><h3>DevSecOps gate</h3><p>Added the four-scanner CI gate, proven with a deliberately planted secret.</p></div>
+          <div class="t-body"><h3>DevSecOps gate</h3><p>Added the four-scanner CI gate; its acceptance test is a deliberately planted secret it has to catch.</p></div>
         </div>
         <div class="t-item poc">
           <div class="t-num">3</div>
-          <div class="t-body"><h3>Predictive scaling</h3><p>KEDA + a forecasting CronJob, measured against a reactive-HPA baseline.</p></div>
+          <div class="t-body"><h3>Predictive scaling</h3><p>KEDA + a forecasting CronJob, built to be measured against a reactive-HPA baseline.</p></div>
         </div>
         <div class="t-item poc">
           <div class="t-num">4</div>
-          <div class="t-body"><h3>Disaster recovery</h3><p>Cross-region failover, tested once, torn back down.</p></div>
+          <div class="t-body"><h3>Disaster recovery</h3><p>Cross-region failover, designed to be run once, timed, and torn back down.</p></div>
         </div>
         <div class="t-item done">
           <div class="t-num">5</div>
-          <div class="t-body"><h3>Documentation</h3><p>This page, the README, and a study guide written phase by phase.</p></div>
+          <div class="t-body"><h3>Documentation</h3><p>This page, the README, and a changelog written phase by phase.</p></div>
         </div>
       </div>
     </section>
