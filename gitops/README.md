@@ -10,7 +10,7 @@ No more `kubectl apply` by hand.
 | --- | --- | --- |
 | VPC, EKS, IAM, KMS | Terraform | Needs cloud APIs / IAM. |
 | LB Controller, Argo CD | Terraform (Helm) | Platform addons that depend on IRSA / cluster identity. |
-| httpbin + future apps | **Argo CD** | Pure Kubernetes workloads — reconciled from Git. |
+| httpbin, monitoring, Kyverno, KEDA, predictive scaler | **Argo CD** | Pure Kubernetes workloads — reconciled from Git. |
 
 ## Layout
 
@@ -18,8 +18,14 @@ No more `kubectl apply` by hand.
 gitops/
 ├── appproject.yaml     # RBAC boundary: allowed repos / namespaces / kinds
 ├── root-app.yaml       # app-of-apps: watches gitops/apps/*
-└── apps/
-    └── httpbin.yaml     # child Application -> ../../k8s (kustomize)
+├── apps/
+│   ├── httpbin.yaml             # -> k8s/ (Kustomize)
+│   ├── monitoring.yaml          # kube-prometheus-stack (Helm)
+│   ├── kyverno.yaml             # Kyverno (Helm)
+│   ├── kyverno-policies.yaml    # -> gitops/policies/ (Kustomize)
+│   ├── keda.yaml                # KEDA (Helm), sync-wave 1
+│   └── predictive-scaling.yaml  # -> k8s/predictive-scaling/, sync-wave 2
+└── policies/                    # Kyverno ClusterPolicies (Enforce)
 ```
 
 Add a new app by dropping one more file in `apps/` and committing — the root
@@ -27,15 +33,16 @@ app picks it up automatically.
 
 ## Bootstrap (one time)
 
-Terraform already installed Argo CD (see `terraform/argocd.tf`). Seed the
-app-of-apps once:
+Terraform already installed Argo CD (see `terraform/modules/platform/argocd.tf`).
+Seed the app-of-apps once:
 
 ```bash
 # 1. Point kubectl at the cluster
 aws eks update-kubeconfig --region <region> --name <cluster-name>
 
-# 2. Update the repoURL placeholders (CHANGE-ME) in the three YAMLs to your repo,
-#    commit, and push.
+# 2. If you forked this repo, point every repoURL in gitops/ at your fork.
+#    Fill in the IRSA role ARNs (terraform output) in apps/keda.yaml and
+#    ../k8s/predictive-scaling/serviceaccount.yaml, commit, and push.
 
 # 3. Seed the project + root app. From then on, everything is Git-driven.
 kubectl apply -f gitops/appproject.yaml
