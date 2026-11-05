@@ -2,8 +2,8 @@
 #
 # EXPLICIT FRAMING (repeated in README): this is a lightweight proactive
 # autoscaling proof-of-concept, not a production ML pipeline. The "forecast"
-# is classical time-series smoothing (weighted moving average with a
-# same-time-yesterday seasonal nudge), not a trained model — described
+# is classical and explainable (current level, recent trend, and the same
+# window one seasonal period ago — see forecast.py), not a trained model — described
 # honestly as such everywhere it's discussed.
 #
 # Sync-wave 2: runs after KEDA (wave 1) so the ScaledObject CRD already
@@ -20,7 +20,7 @@ metadata:
 spec:
   project: eks-httpbin-alb
   source:
-    repoURL: https://CHANGE-ME/your-org/your-repo.git
+    repoURL: https://github.com/4Min4m/eks-gate-forecast-dr.git
     targetRevision: main
     path: k8s/predictive-scaling
   destination:
