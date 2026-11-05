@@ -39,17 +39,19 @@ portfolio piece. short version:
 
 > **⚠️ Verification status.** The baseline platform (Terraform + GitOps +
 > Karpenter + Kyverno, everything above the "Project Evolution" line) was
-> previously deployed and tested end-to-end on real AWS infrastructure. The
-> three additions below it — the expanded CI security gate, KEDA predictive
-> scaling, and the DR proof-of-concept — were authored as a complete,
-> internally-consistent design (code, IAM, GitOps wiring) without access to
-> a live AWS account or network from the environment that wrote them, so
-> they have **not** been run through `terraform validate`/`plan`/`apply` or
-> a real CI run yet. Treat this code the way you'd treat a thorough PR from
-> a colleague: read it, run it, and expect to fix small things (a Checkov
-> finding, a KEDA scaler field name against whatever version you pin) on
-> first contact — that first-contact debugging is itself covered as an
-> exercise in the study guide, not glossed over.
+> previously deployed and tested end-to-end on real AWS infrastructure.
+> For the three additions:
+>
+> - **CI security gate** — committed in `.github/workflows/terraform.yml`.
+>   gitleaks (full history), Checkov, tflint, `terraform fmt`/`validate`
+>   (dev, prod, bootstrap) and the forecaster's unit tests all pass against
+>   this code locally; Semgrep runs for the first time in CI.
+> - **KEDA predictive scaling** and the **DR proof-of-concept** — the
+>   Terraform validates and the forecasting logic is unit-tested, but
+>   neither has been applied to a live AWS account yet. Treat them like a
+>   thorough PR from a colleague: read, run, and expect small first-contact
+>   fixes (e.g. a KEDA chart value against the version you pin). The
+>   recorded load-test comparison and the measured RTO are still to come.
 
 ## What this demonstrates
 
@@ -161,9 +163,9 @@ gitops/
 └── policies/                      # Kyverno ClusterPolicies (enforce)
 
 k8s/                               # httpbin app (Kustomize, applied by Argo CD)
-└── predictive-scaling/            # forecast.py + CronJob + KEDA ScaledObject + k6 load test (Phase 3)
+└── predictive-scaling/            # forecast.py (+ unit tests) • CronJob • KEDA ScaledObject • k6 load test (Phase 3)
 
-.github/workflows/                 # security-gate (gitleaks/semgrep/checkov/npm-audit) • fmt • validate • tflint • tfsec • plan
+.github/workflows/terraform.yml    # security-gate (gitleaks/semgrep/npm-audit/checkov) → validate (fmt/validate/tflint/tests) → plan
 .checkov.yaml                      # IaC scan config — no blanket suppressions, see file header
 CHANGELOG.md                       # phase-by-phase project history and the decisions behind it
 ```
@@ -213,7 +215,9 @@ and Argo CD. Prod is identical: `cd ../prod && terraform init -backend-config=ba
 
 ```bash
 aws eks update-kubeconfig --region us-east-1 --name httpbin-dev
-# set CHANGE-ME repo URLs in gitops/*.yaml and the ACM ARN in k8s/ingress-public.yaml, commit
+# set the ACM ARN in k8s/ingress-public.yaml and the IRSA role ARNs (terraform output) in
+# gitops/apps/keda.yaml + k8s/predictive-scaling/serviceaccount.yaml, commit.
+# (Forked the repo? Point the repoURL fields in gitops/ at your fork too.)
 kubectl apply -f gitops/appproject.yaml
 kubectl apply -f gitops/root-app.yaml
 ```
@@ -270,16 +274,28 @@ kubectl -n monitoring port-forward svc/kube-prometheus-stack-grafana 3000:80
 **Framing: a lightweight proactive-autoscaling proof-of-concept, not a
 production ML pipeline.**
 
-A CronJob (`k8s/predictive-scaling/`) runs every 5 minutes, pulls recent ALB
+A CronJob (`k8s/predictive-scaling/`) runs every 5 minutes, pulls ALB
 `RequestCount` history from CloudWatch (go-httpbin exposes no `/metrics`, so
-this — not Prometheus — is the request-rate signal), computes a forecast
-using a weighted moving average with a same-time-yesterday seasonal nudge
-(classical time-series smoothing, explicitly **not** a trained model), and
-publishes a desired-replica-count as a custom CloudWatch metric. KEDA's
-`aws-cloudwatch` trigger scales the `httpbin` Deployment off that forecast,
-so it can scale out *ahead of* a known, recurring traffic ramp instead of
-only reacting after load has already landed — the structural thing a plain
-HPA can't do.
+this — not Prometheus — is the request-rate signal), and publishes the
+replica count needed for the **next 10 minutes** as a custom CloudWatch
+metric. The forecast is the largest of three classical, explainable terms
+(explicitly **not** a trained model):
+
+1. **level** — the request rate right now;
+2. **trend** — that level projected 10 minutes ahead along the recent slope;
+3. **seasonal** — the peak of the *same upcoming 10-minute window one period
+   ago* (`SEASONAL_PERIOD_MINUTES`: 1440 for a daily cycle, 60 for the demo).
+
+The seasonal term is what makes it proactive: it scales out *before* a known,
+recurring ramp starts — the structural thing a plain HPA can't do. Taking the
+maximum deliberately biases toward scaling out early; KEDA's cooldown handles
+scaling back in. KEDA's `aws-cloudwatch` trigger reads the metric and scales
+the `httpbin` Deployment; Argo CD is told to ignore `spec.replicas` on it so
+it doesn't "heal" the autoscaler's work back to 2.
+
+The logic is unit-tested (`k8s/predictive-scaling/test_forecast.py`,
+stdlib only, run in CI), including a replay of the k6 ramp asserting the
+published replica count is never short of the next five minutes' demand.
 
 The ALB itself is GitOps-managed (created by the AWS Load Balancer
 Controller reconciling the Ingress), so Terraform never sees its ARN; the
@@ -288,9 +304,16 @@ at every run, rather than hardcoding a value that would go stale on ALB
 recreation.
 
 The actual portfolio artifact isn't the YAML — it's a recorded, side-by-side
-comparison of the same synthetic traffic ramp run once against a plain
-reactive HPA (`k8s/predictive-scaling/reactive-hpa-baseline.yaml`) and once
-against the KEDA ScaledObject.
+comparison of the same synthetic traffic ramp (`loadtest/ramp.js`) run once
+against a plain reactive HPA (`k8s/predictive-scaling/reactive-hpa-baseline.yaml`)
+and once against the KEDA ScaledObject. With the demo period of 60 minutes:
+
+1. Delete the ScaledObject, apply the reactive HPA baseline, run the ramp at
+   **T**, and record Grafana.
+2. Delete the HPA and let Argo CD restore the ScaledObject.
+3. Run the identical ramp at **T + 60 min**. The baseline run is now the
+   forecaster's "last period", so it scales out ahead of the ramp. Record
+   Grafana again and put the two side by side.
 
 ## Disaster recovery — DynamoDB Global Tables + Route 53
 
@@ -313,7 +336,11 @@ it on to run the test.
   of the plan, worth being able to explain as such.
 - **Route 53 failover routing** with health checks against each region's
   API Gateway drives the actual failover; a short (30s) TTL keeps DNS
-  propagation from dominating your measured RTO.
+  propagation from dominating your measured RTO. The failover name
+  (`dr-poc.<your-zone>`) is a real API Gateway **custom domain in both
+  regions**, each with its own ACM certificate — a plain CNAME to an
+  `execute-api` hostname would fail (API Gateway rejects the unknown
+  `Host`, and the TLS certificate wouldn't match).
 - Running the real test — breaking the primary health check, measuring
   detection + failover time, confirming the secondary serves reads/writes
   against the replicated table, failing back, then tearing the DR resources
@@ -326,16 +353,32 @@ it on to run the test.
 ## Security summary
 
 Scoped public API endpoint (validation rejects `0.0.0.0/0`); KMS envelope
-encryption for secrets; IRSA for the LB Controller, EBS CSI, Karpenter, KEDA
+encryption for secrets with an explicit key policy; nodes only in private
+subnets (public subnets carry no Karpenter discovery tag and assign no
+public IPs); VPC default security group stripped of all rules; IRSA for the LB Controller, EBS CSI, Karpenter, KEDA
 operator, and predictive-scaler CronJob (no node-role permissions, no static
 keys — each principal scoped to exactly what it does, e.g. the predictive-
 scaler can `PutMetricData` only into its own CloudWatch namespace); HTTPS ALB
 with TLS redirect; private nodes with SSM access; hardened pods enforced by
 Kyverno; encrypted, versioned, TLS-only state bucket; and pinned versions
 throughout. CI runs a blocking DevSecOps gate (gitleaks, Semgrep, Checkov,
-npm-audit-if-applicable) before `tfsec` + `tflint` on every PR, and
-authenticates to AWS via OIDC. The DR Lambda execution role is likewise
+npm-audit-if-applicable) before `terraform validate` + `tflint` on every PR,
+and authenticates to AWS via OIDC. The DR Lambda execution role is likewise
 scoped to `GetItem`/`PutItem` on exactly the one DR table, in either region.
+
+**Checkov trade-offs.** Every skipped check is an inline
+`#checkov:skip=<ID>:<reason>` on the specific resource (no global skips), and
+each has a production fix:
+
+| Check | Where | Why skipped here | Production fix |
+| --- | --- | --- | --- |
+| CKV_AWS_39 | EKS public endpoint | Needed for operator/CI access; CIDR-locked | Private endpoint + VPN/bastion or in-VPC CI runners |
+| CKV_AWS_382 | Control-plane SG egress | Control plane must reach kubelets/webhooks/AWS APIs | Scope egress to the VPC CIDR + VPC endpoints |
+| CKV2_AWS_11 | VPC flow logs | Standing cost for a demo | Flow logs to S3 or CloudWatch with retention |
+| CKV_AWS_394 | AZ data source | First N zones by name; new AZs sort after | Pin `zone-id`s per region |
+| CKV_AWS_309 | DR API routes | Route 53 health checks can't sign requests; stage is throttled | IAM auth on writes, separate unauthenticated health path |
+| CKV_AWS_145 / 18 / 144 / CKV2_AWS_62 | State bucket | SSE-S3, single operator, versioned | SSE-KMS CMK, CloudTrail data events, CRR |
+| CKV_AWS_119 | Lock table | Holds only lock IDs/digests | CMK encryption |
 
 ---
 
@@ -343,16 +386,23 @@ scoped to `GetItem`/`PutItem` on exactly the one DR table, in either region.
 
 `.github/workflows/terraform.yml`:
 
-1. **`security-gate`** — gitleaks (secrets, whole repo) → Semgrep (SAST,
-   scoped to this repo's actual custom logic) → npm audit (SCA, only if a
-   `package.json` exists — it currently doesn't) → Checkov (IaC, `terraform/`).
-   Fails the job on any finding unless the `SECURITY_SOFT_FAIL` repo variable
-   is set to demo a green run on purpose. See `.checkov.yaml` for the
-   no-blanket-suppression policy on any skips.
-2. **`validate`** (needs `security-gate`) — `fmt`, `validate`, `tflint`, `tfsec`.
-3. **`plan`** (needs `validate`) — OIDC-authenticated `terraform plan`.
+1. **`security-gate`** — gitleaks (secrets, whole repo, full history),
+   Semgrep (SAST, scoped to this repo's actual custom code), npm audit (SCA,
+   only if a `package.json` exists — it currently doesn't), Checkov (IaC,
+   `terraform/`). Every scanner always runs so one failure never hides
+   another, then the job fails if any found something — unless the
+   `SECURITY_SOFT_FAIL` repo variable is `true`, to demo a green run on
+   purpose. A summary table lands in the run's job summary.
+2. **`validate`** (needs `security-gate`) — `terraform fmt -check`,
+   `terraform validate` for `dev`, `prod` and `bootstrap`, `tflint`, and the
+   forecaster's unit tests.
+3. **`plan`** (needs `validate`) — OIDC-authenticated `terraform plan` for
+   `dev`. Runs only when the `AWS_ROLE_ARN` repo variable is set (plus
+   `TF_STATE_BUCKET` / `TF_LOCK_TABLE`), so the public repo stays green
+   without an AWS account behind it.
 
-In a real setup you'd run a matrix over `dev`/`prod` env directories.
+To prove the gate blocks: commit a fake AWS key on a branch, open a PR, and
+watch gitleaks fail the run (then delete the branch).
 
 ---
 
